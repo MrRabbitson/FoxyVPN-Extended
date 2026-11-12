@@ -46,7 +46,7 @@ jobs:
         with:
           gradle-version: 8.10.2
       - name: Lint and assemble debug
-        run: gradle :app:lintDebug :app:assembleDebug --no-daemon --console=plain
+        run: gradle :app:lintDebug :app:assembleDebug :app:assembleRelease --no-daemon --console=plain
       - uses: actions/upload-artifact@v4
         with:
           name: foxyvpn-debug-apk
@@ -61,11 +61,14 @@ jobs:
           target_commitish: ${{ github.sha }}
           prerelease: true
           body: |
-            Debug-сборка из ветки `${{ github.ref_name }}` (коммит ${{ github.sha }}).
-            Большинству телефонов подходит файл с `arm64-v8a`; если не уверен — бери `universal`.
+Сборка из ветки `${{ github.ref_name }}` (коммит ${{ github.sha }}).
+            Бери файл `release`; `arm64-v8a` подходит большинству телефонов, если не уверен — `universal`.
+            Файлы `debug` нужны только для отладки.
           files: |
             app/build/outputs/apk/debug/*arm64-v8a*.apk
             app/build/outputs/apk/debug/*universal*.apk
+            app/build/outputs/apk/release/*arm64-v8a*.apk
+            app/build/outputs/apk/release/*universal*.apk
           fail_on_unmatched_files: true
       - name: Upload diagnostics
         if: always()
