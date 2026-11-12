@@ -1,8 +1,7 @@
 package com.vauth.foxyvpn.ui.components
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
@@ -22,6 +21,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
@@ -55,7 +55,9 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
@@ -71,6 +73,7 @@ import com.vauth.foxyvpn.ui.theme.FoxAmber
 import com.vauth.foxyvpn.ui.theme.FoxMagenta
 import com.vauth.foxyvpn.ui.theme.FoxOrange
 import com.vauth.foxyvpn.ui.theme.FoxRed
+import com.vauth.foxyvpn.ui.theme.FoxViolet
 import com.vauth.foxyvpn.ui.theme.FoxYellow
 import com.vauth.foxyvpn.ui.theme.LocalFoxyStatusColors
 import com.vauth.foxyvpn.ui.theme.firefoxSweepBrush
@@ -162,7 +165,6 @@ fun FoxConnectButton(
     }
 
     val track = MaterialTheme.colorScheme.outlineVariant
-    val disc = MaterialTheme.colorScheme.surfaceContainerHigh
     val statusColors = LocalFoxyStatusColors.current
     val badge by
         animateColorAsState(
@@ -252,15 +254,11 @@ fun FoxConnectButton(
             }
         }
 
-        Box(
-            modifier =
-                Modifier.size(size * 0.62f)
-                    .shadow(elevation = 8.dp, shape = CircleShape, ambientColor = FoxOrange, spotColor = FoxOrange)
-                    .clip(CircleShape)
-                    .background(disc),
-            contentAlignment = Alignment.Center,
-        ) {
-            FoxMascot(mood = state.toFoxMood(), modifier = Modifier.size(size * 0.47f).offset(y = 2.dp))
+        GlassSurface(modifier = Modifier.size(size * 0.62f), shape = CircleShape) {
+            FoxMascot(
+                mood = state.toFoxMood(),
+                modifier = Modifier.align(Alignment.Center).size(size * 0.47f).offset(y = 2.dp),
+            )
         }
 
         Box(
@@ -284,13 +282,12 @@ fun FoxConnectButton(
 }
 
 /**
- * A still, soft glow behind the top of the screen. It does not move on its
- * own; it only warms up or cools down with [intensity] (the connection state).
+ * Still colour fields behind the glass. Nothing here moves on its own; the
+ * warm fields only brighten or dim with [intensity] (the connection state).
  */
 @Composable
 fun FlameBackdrop(modifier: Modifier = Modifier, intensity: Float = 1f) {
     val dark = MaterialTheme.colorScheme.background.luminanceApprox() < 0.3f
-    val base = if (dark) 0.30f else 0.20f
     val glow by
         animateFloatAsState(
             targetValue = intensity,
@@ -300,25 +297,122 @@ fun FlameBackdrop(modifier: Modifier = Modifier, intensity: Float = 1f) {
     Canvas(modifier) {
         val w = size.width
         val h = size.height
-        val warm = base * (0.25f + 0.75f * glow)
-        val focus = Offset(w * 0.5f, h * 0.30f)
-        drawRect(
-            Brush.radialGradient(
-                0f to FoxOrange.copy(alpha = warm),
-                0.55f to FoxRed.copy(alpha = warm * 0.35f),
-                1f to FoxMagenta.copy(alpha = 0f),
-                center = focus,
-                radius = w * 0.95f,
+        val warm = (if (dark) 0.42f else 0.30f) * (0.35f + 0.65f * glow)
+        val cool = if (dark) 0.30f else 0.16f
+        fun field(color: Color, x: Float, y: Float, radius: Float, strength: Float) {
+            val at = Offset(w * x, h * y)
+            drawRect(
+                Brush.radialGradient(
+                    0f to color.copy(alpha = strength),
+                    1f to color.copy(alpha = 0f),
+                    center = at,
+                    radius = w * radius,
+                )
             )
+        }
+        field(FoxOrange, 0.50f, 0.26f, 0.95f, warm)
+        field(FoxMagenta, 1.00f, 0.52f, 0.80f, warm * 0.55f)
+        field(FoxYellow, 0.02f, 0.02f, 0.70f, warm * 0.50f)
+        field(FoxViolet, 0.00f, 0.80f, 0.90f, cool)
+        field(FoxRed, 0.85f, 1.00f, 0.70f, cool * 0.6f)
+    }
+}
+
+@Composable
+private fun isDarkSurface(): Boolean = MaterialTheme.colorScheme.onSurface.luminanceApprox() > 0.5f
+
+/**
+ * A pane of glass: translucent body, a sheen falling off from the top edge and
+ * a rim that catches light at opposite corners. Pressing it flexes the pane.
+ */
+@Composable
+fun GlassSurface(
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(24.dp),
+    onClick: (() -> Unit)? = null,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val dark = isDarkSurface()
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val press =
+        animateFloatAsState(
+            targetValue = if (pressed) 1f else 0f,
+            animationSpec = spring(dampingRatio = 0.7f, stiffness = 600f),
+            label = "glass-press",
         )
-        val corner = Offset(w * 0.05f, 0f)
-        drawRect(
-            Brush.radialGradient(
-                0f to FoxYellow.copy(alpha = warm * 0.5f),
-                1f to FoxYellow.copy(alpha = 0f),
-                center = corner,
-                radius = w * 0.7f,
-            )
+    val bodyTop = Color.White.copy(alpha = if (dark) 0.13f else 0.74f)
+    val bodyBottom = Color.White.copy(alpha = if (dark) 0.05f else 0.48f)
+    val sheenTop = Color.White.copy(alpha = if (dark) 0.09f else 0.30f)
+    val rimBright = Color.White.copy(alpha = if (dark) 0.44f else 0.95f)
+    val rimDim = Color.White.copy(alpha = if (dark) 0.07f else 0.40f)
+
+    Box(
+        modifier =
+            modifier
+                .graphicsLayer {
+                    val flex = 1f - 0.025f * press.value
+                    scaleX = flex
+                    scaleY = flex
+                }
+                .clip(shape)
+                .drawWithCache {
+                    val outline = shape.createOutline(size, layoutDirection, this)
+                    val body = Brush.verticalGradient(listOf(bodyTop, bodyBottom))
+                    val sheen =
+                        Brush.verticalGradient(
+                            0f to sheenTop,
+                            1f to Color.Transparent,
+                            endY = size.height * 0.45f,
+                        )
+                    val rim =
+                        Brush.linearGradient(
+                            0f to rimBright,
+                            0.30f to rimDim,
+                            0.70f to rimDim,
+                            1f to rimBright.copy(alpha = rimBright.alpha * 0.55f),
+                            start = Offset.Zero,
+                            end = Offset(size.width, size.height),
+                        )
+                    // Half of the stroke is clipped away, leaving a 1dp inner rim.
+                    val rimStroke = Stroke(width = 2.dp.toPx())
+                    onDrawWithContent {
+                        drawOutline(outline, body)
+                        drawOutline(outline, sheen)
+                        val lit = press.value
+                        if (lit > 0f) drawOutline(outline, Color.White, alpha = 0.10f * lit)
+                        drawContent()
+                        drawOutline(outline, rim, style = rimStroke)
+                    }
+                }
+                .then(
+                    if (onClick != null) {
+                        Modifier.clickable(
+                            interactionSource = interaction,
+                            indication = null,
+                            role = Role.Button,
+                            onClick = onClick,
+                        )
+                    } else {
+                        Modifier
+                    }
+                ),
+        content = content,
+    )
+}
+
+/**
+ * Puts a screen on the glass backdrop: Material surfaces inside become
+ * see-through so lists and bars sit directly on the colour fields.
+ */
+@Composable
+fun GlassScreen(intensity: Float = 0.45f, content: @Composable () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Box(Modifier.fillMaxSize().background(scheme.background)) {
+        FlameBackdrop(Modifier.fillMaxSize(), intensity = intensity)
+        MaterialTheme(
+            colorScheme = scheme.copy(surface = Color.Transparent, background = Color.Transparent),
+            content = content,
         )
     }
 }
@@ -352,8 +446,9 @@ fun GradientText(
 }
 
 /**
- * Text whose digits roll like an odometer: only the characters that actually
- * changed move, so a ticking clock animates its last digit and nothing else.
+ * Text whose digits roll like an odometer: only the digits that actually
+ * changed move. When the text changes shape (a number becomes a word, or gains
+ * a digit) the whole value cross-fades instead, so letters never shuffle.
  */
 @Composable
 fun RollingText(
@@ -363,25 +458,36 @@ fun RollingText(
     color: Color = MaterialTheme.colorScheme.onSurface,
 ) {
     val tabular = style.copy(fontFeatureSettings = "tnum")
-    Row(modifier) {
-        text.forEachIndexed { index, char ->
-            // Keyed from the end so a growing number keeps its low digits in place.
-            key(text.length - index) {
-                AnimatedContent(
-                    targetState = char,
-                    transitionSpec = {
-                        if (initialState.isDigit() && targetState.isDigit()) {
-                            (slideInVertically(tween(260, easing = EmphasizedEasing)) { it } +
-                                fadeIn(tween(180))) togetherWith
-                                (slideOutVertically(tween(260, easing = EmphasizedEasing)) { -it } +
-                                    fadeOut(tween(120)))
-                        } else {
-                            EnterTransition.None togetherWith ExitTransition.None
+    AnimatedContent(
+        targetState = text,
+        modifier = modifier,
+        transitionSpec = {
+            (fadeIn(tween(200, delayMillis = 70)) togetherWith fadeOut(tween(90)))
+                .using(SizeTransform(clip = false))
+        },
+        contentAlignment = Alignment.CenterStart,
+        contentKey = { value -> value.map { if (it.isDigit()) '0' else it }.joinToString("") },
+        label = "rolling-text",
+    ) { value ->
+        Row {
+            value.forEachIndexed { index, char ->
+                if (!char.isDigit()) {
+                    Text(char.toString(), style = tabular, color = color, softWrap = false)
+                } else {
+                    key(value.length - index) {
+                        AnimatedContent(
+                            targetState = char,
+                            transitionSpec = {
+                                (slideInVertically(tween(260, easing = EmphasizedEasing)) { it } +
+                                    fadeIn(tween(180))) togetherWith
+                                    (slideOutVertically(tween(260, easing = EmphasizedEasing)) { -it } +
+                                        fadeOut(tween(120)))
+                            },
+                            label = "rolling-digit",
+                        ) { digit ->
+                            Text(digit.toString(), style = tabular, color = color, softWrap = false)
                         }
-                    },
-                    label = "rolling-char",
-                ) { shown ->
-                    Text(shown.toString(), style = tabular, color = color, softWrap = false)
+                    }
                 }
             }
         }

@@ -14,12 +14,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import com.vauth.foxyvpn.data.FoxyRemoteConfig
+import com.vauth.foxyvpn.data.model.ConnectionState
 import com.vauth.foxyvpn.ui.navigation.FoxyNavGraph
 import com.vauth.foxyvpn.ui.theme.FoxyVpnTheme
 import com.vauth.foxyvpn.ui.theme.rememberThemeController
 import com.vauth.foxyvpn.vpn.FoxyVpnService
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 class MainActivity : ComponentActivity() {
 
@@ -62,6 +68,23 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private var switchJob: Job? = null
+
+    /** Restarts the tunnel so it picks up a newly selected location. */
+    private fun switchServer() {
+        if (FoxyVpnService.state.value == ConnectionState.DISCONNECTED) return
+        switchJob?.cancel()
+        switchJob =
+            lifecycleScope.launch {
+                FoxyVpnService.stop(this@MainActivity)
+                val stopped =
+                    withTimeoutOrNull(10_000L) {
+                        FoxyVpnService.state.first { it == ConnectionState.DISCONNECTED }
+                    }
+                if (stopped != null) requestConnect()
+            }
+    }
+
     private fun requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         val alreadyGranted =
@@ -91,7 +114,11 @@ class MainActivity : ComponentActivity() {
                         container = app,
                         themeController = themeController,
                         onRequestConnect = { requestConnect() },
-                        onDisconnect = { FoxyVpnService.stop(this) },
+                        onDisconnect = {
+                            switchJob?.cancel()
+                            FoxyVpnService.stop(this)
+                        },
+                        onSwitchServer = { switchServer() },
                     )
                 }
             }

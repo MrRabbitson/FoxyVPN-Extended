@@ -48,8 +48,6 @@ import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.VerifiedUser
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -90,7 +88,7 @@ import com.vauth.foxyvpn.ui.components.FlameBackdrop
 import com.vauth.foxyvpn.ui.components.FoxConnectButton
 import com.vauth.foxyvpn.ui.components.FoxMascot
 import com.vauth.foxyvpn.ui.components.FoxMood
-import com.vauth.foxyvpn.ui.components.GradientText
+import com.vauth.foxyvpn.ui.components.GlassSurface
 import com.vauth.foxyvpn.ui.components.RollingText
 import com.vauth.foxyvpn.ui.localizedCountryName
 import com.vauth.foxyvpn.ui.theme.FoxOrange
@@ -200,7 +198,7 @@ fun HomeScreen(
                                 animated = false,
                             )
                             Spacer(Modifier.width(8.dp))
-                            GradientText(
+                            Text(
                                 stringResource(R.string.app_name),
                                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
                             )
@@ -377,12 +375,7 @@ fun HomeScreen(
                     Spacer(Modifier.height(20.dp))
 
                     // Location
-                        Card(
-                            onClick = onOpenServers,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(20.dp),
-                            colors = foxyCardColors(),
-                        ) {
+                        GlassSurface(modifier = Modifier.fillMaxWidth(), onClick = onOpenServers) {
                             Row(
                                 Modifier.padding(16.dp),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -457,11 +450,7 @@ fun HomeScreen(
                     Spacer(Modifier.height(12.dp))
 
                     // IP + protection badge
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(20.dp),
-                            colors = foxyCardColors(),
-                        ) {
+                        GlassSurface(modifier = Modifier.fillMaxWidth()) {
                             val isConnected = state == ConnectionState.CONNECTED
                             val ipDisplay =
                                 if (isConnected) {
@@ -544,11 +533,7 @@ fun HomeScreen(
                     Spacer(Modifier.height(12.dp))
 
                     // Traffic, latency & quota
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(20.dp),
-                            colors = foxyCardColors(),
-                        ) {
+                        GlassSurface(modifier = Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(16.dp)) {
                                 val isConnected = state == ConnectionState.CONNECTED
                                 val remaining = quotaRemaining
@@ -652,12 +637,6 @@ fun HomeScreen(
         }
     }
 }
-
-@Composable
-private fun foxyCardColors() =
-    CardDefaults.cardColors(
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.9f)
-    )
 
 @Composable
 private fun StatTile(

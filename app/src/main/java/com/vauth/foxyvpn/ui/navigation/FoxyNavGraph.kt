@@ -24,7 +24,10 @@ import androidx.navigation.compose.rememberNavController
 import com.vauth.foxyvpn.AppContainer
 import com.vauth.foxyvpn.ui.HomeViewModel
 import com.vauth.foxyvpn.ui.ServerListViewModel
+import com.vauth.foxyvpn.data.model.ConnectionState
 import com.vauth.foxyvpn.ui.components.EmphasizedEasing
+import com.vauth.foxyvpn.ui.components.GlassScreen
+import com.vauth.foxyvpn.vpn.FoxyVpnService
 import com.vauth.foxyvpn.ui.screens.HomeScreen
 import com.vauth.foxyvpn.ui.screens.LoginScreen
 import com.vauth.foxyvpn.ui.screens.LogsScreen
@@ -52,6 +55,7 @@ fun FoxyNavGraph(
     themeController: ThemeController,
     onRequestConnect: () -> Unit,
     onDisconnect: () -> Unit,
+    onSwitchServer: () -> Unit,
 ) {
     val context = LocalContext.current
     val sessionScope = rememberCoroutineScope()
@@ -135,12 +139,23 @@ fun FoxyNavGraph(
                             loadFailedMessage = context.getString(com.vauth.foxyvpn.R.string.server_list_load_failed),
                         )
                 )
+            GlassScreen {
             ServerListScreen(
                 viewModel = serverListModel,
                 proxyStateStore = container.proxyStateStore,
-                onServerSelected = { navController.popBackStack() },
+                onServerSelected = {
+                    navController.popBackStack()
+                    // Picking another location while connected moves the tunnel there right away.
+                    if (
+                        FoxyVpnService.state.value != ConnectionState.DISCONNECTED &&
+                            container.proxyStateStore.selectedProxyFlow.value != FoxyVpnService.activeCandidate.value
+                    ) {
+                        onSwitchServer()
+                    }
+                },
                 onBack = { navController.popBackStack() },
             )
+            }
         }
         composable(FoxyRoutes.SETTINGS) {
             val app = context.applicationContext as? com.vauth.foxyvpn.FoxyVpnApp
@@ -149,6 +164,7 @@ fun FoxyNavGraph(
             val manualUpdate by updater?.manualUpdate?.collectAsStateWithLifecycle()
                 ?: remember { mutableStateOf(null) }
             val isSignedIn = remember(container.tokenStore.sessionEpoch) { container.tokenStore.hasStoredSession() }
+            GlassScreen {
             SettingsScreen(
                 settingsStore = container.settingsStore,
                 isSignedIn = isSignedIn,
@@ -198,7 +214,8 @@ fun FoxyNavGraph(
                 },
                 onBack = { navController.popBackStack() },
             )
+            }
         }
-        composable(FoxyRoutes.LOGS) { LogsScreen(onBack = { navController.popBackStack() }) }
+        composable(FoxyRoutes.LOGS) { GlassScreen { LogsScreen(onBack = { navController.popBackStack() }) } }
     }
 }

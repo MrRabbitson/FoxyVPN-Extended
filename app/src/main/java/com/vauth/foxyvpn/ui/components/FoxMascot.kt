@@ -133,7 +133,7 @@ private class FoxPose {
                     launch { earRight.animateTo(0f, spring(dampingRatio = 0.38f, stiffness = 260f)) }
                     launch {
                         // Anticipation, then a springy pop.
-                        squash.animateTo(0.08f, tween(110, easing = FastOutLinearInEasing))
+                        squash.animateTo(0.05f, tween(110, easing = FastOutLinearInEasing))
                         squash.animateTo(0f, spring(dampingRatio = 0.3f, stiffness = 420f))
                     }
                     launch { joy.animateTo(1f, tween(350)) }
@@ -189,15 +189,6 @@ private class FoxPose {
                         while (true) {
                             delay(Random.nextLong(4_500, 9_500))
                             flickEar(rest = 0f)
-                        }
-                    }
-                    launch {
-                        while (true) {
-                            delay(Random.nextLong(7_000, 14_000))
-                            val side = if (Random.nextBoolean()) 0.7f else -0.7f
-                            lookX.animateTo(side, tween(260, easing = SoftInOut))
-                            delay(Random.nextLong(500, 1_100))
-                            lookX.animateTo(0f, tween(320, easing = SoftInOut))
                         }
                     }
                 }
@@ -265,18 +256,11 @@ fun FoxMascot(mood: FoxMood, modifier: Modifier = Modifier, animated: Boolean = 
             animationSpec = infiniteRepeatable(tween(3_800, easing = LinearEasing)),
             label = "fox-breath",
         )
-    val drift by
-        loop.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(3_200, easing = LinearEasing)),
-            label = "fox-zz",
-        )
 
     Canvas(modifier) {
         val unit = size.minDimension / 100f
         val asleep = pose.asleep.value
-        val breathing = if (animated) sin(breath * 2 * PI).toFloat() * (0.5f + 0.7f * asleep) else 0f
+        val breathing = if (animated) sin(breath * 2 * PI).toFloat() * (0.3f + 0.6f * asleep) else 0f
         translate(
             left = (size.width - 100f * unit) / 2f,
             top = (size.height - 100f * unit) / 2f,
@@ -297,7 +281,6 @@ fun FoxMascot(mood: FoxMood, modifier: Modifier = Modifier, animated: Boolean = 
                         }
                     }
                 }
-                if (animated && asleep > 0.01f) drawSleepZ(drift, alpha = asleep)
             }
         }
     }
@@ -362,12 +345,6 @@ private fun DrawScope.drawFoxHead(
             close()
         }
     drawPath(flame, FoxYellow.copy(alpha = 0.75f))
-
-    if (joy > 0.01f) {
-        val blush = Color(0xFFFF4F7B).copy(alpha = 0.35f * joy.coerceIn(0f, 1f))
-        drawOval(blush, topLeft = Offset(20f, 64f), size = Size(10f, 6f))
-        drawOval(blush, topLeft = Offset(70f, 64f), size = Size(10f, 6f))
-    }
 
     val gaze = lookX * 2.4f
     drawEye(cx = 35f + gaze, cy = 55f, open = eyeOpen, squint = squint, gaze = lookX)
@@ -444,26 +421,3 @@ private fun innerEarPath(left: Boolean): Path =
         }
         close()
     }
-
-/** Two "z"s drifting up from the sleeping fox. */
-private fun DrawScope.drawSleepZ(progress: Float, alpha: Float) {
-    for (i in 0 until 2) {
-        val p = (progress + i * 0.5f) % 1f
-        val zSize = 4.5f + 4f * p
-        val x = 80f + 10f * p + sin(p * 2 * PI).toFloat() * 1.5f
-        val y = 28f - 24f * p
-        val fade = if (p < 0.25f) p / 0.25f else 1f - (p - 0.25f) / 0.75f
-        val z =
-            Path().apply {
-                moveTo(x, y)
-                lineTo(x + zSize, y)
-                lineTo(x, y + zSize)
-                lineTo(x + zSize, y + zSize)
-            }
-        drawPath(
-            z,
-            FurOrangeDark.copy(alpha = (alpha * fade).coerceIn(0f, 1f)),
-            style = Stroke(width = 1.8f, cap = StrokeCap.Round),
-        )
-    }
-}
