@@ -159,7 +159,7 @@ internal class AppUpdater(private val context: Context) {
                             context,
                             context.getString(
                                 R.string.update_check_failed,
-                                e.message ?: "Network error",
+                                e.message ?: context.getString(R.string.update_network_error),
                             ),
                             Toast.LENGTH_LONG,
                         ).show()

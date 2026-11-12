@@ -55,7 +55,6 @@ import com.vauth.foxyvpn.ui.components.FlameButton
 import com.vauth.foxyvpn.ui.components.FoxMascot
 import com.vauth.foxyvpn.ui.components.FoxMood
 import com.vauth.foxyvpn.ui.components.GradientText
-import com.vauth.foxyvpn.ui.components.StaggeredEntrance
 import com.vauth.foxyvpn.ui.theme.ThemeController
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -169,39 +168,31 @@ fun LoginScreen(
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                StaggeredEntrance(index = 0) {
                     FoxMascot(mood = FoxMood.GUARDING, modifier = Modifier.size(132.dp))
-                }
                 Spacer(Modifier.height(16.dp))
-                StaggeredEntrance(index = 1) {
                     GradientText(
                         stringResource(R.string.login_title),
                         style = MaterialTheme.typography.headlineMedium.copy(textAlign = TextAlign.Center),
                     )
-                }
                 Spacer(Modifier.height(10.dp))
-                StaggeredEntrance(index = 2) {
                     Text(
                         stringResource(R.string.login_desc),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                     )
-                }
                 storageError?.let {
                     Spacer(Modifier.height(12.dp))
                     Text(it, color = MaterialTheme.colorScheme.error)
                 }
                 Spacer(Modifier.height(24.dp))
 
-                StaggeredEntrance(index = 3) {
                     FlameButton(
                         text = stringResource(R.string.login_btn_sign_in),
                         onClick = model::startBrowserLogin,
                         enabled = !completingBrowserLogin,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                }
                 Text(
                     stringResource(R.string.login_help),
                     style = MaterialTheme.typography.bodySmall,

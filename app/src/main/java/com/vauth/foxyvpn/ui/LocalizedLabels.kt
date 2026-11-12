@@ -1,6 +1,8 @@
 package com.vauth.foxyvpn.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import com.vauth.foxyvpn.R
 import com.vauth.foxyvpn.data.SettingsStore
@@ -57,3 +59,12 @@ fun SettingsStore.DnsProvider.localizedLabel(): String =
         SettingsStore.DnsProvider.CUSTOM -> stringResource(R.string.dns_custom_doh)
         else -> label
     }
+
+@Composable
+fun localizedCountryName(code: String, rawName: String): String {
+    val locale = LocalConfiguration.current.locales[0]
+    val recommended = stringResource(R.string.home_recommended)
+    return remember(code, rawName, locale, recommended) {
+        com.vauth.foxyvpn.data.model.localizedCountryName(code, rawName, locale, recommended)
+    }
+}

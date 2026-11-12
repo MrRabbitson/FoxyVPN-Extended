@@ -9,6 +9,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -83,13 +85,14 @@ import com.vauth.foxyvpn.data.model.ConnectionState
 import com.vauth.foxyvpn.data.model.displayName
 import com.vauth.foxyvpn.data.model.emojiFlag
 import com.vauth.foxyvpn.ui.HomeViewModel
+import com.vauth.foxyvpn.ui.components.EmphasizedEasing
 import com.vauth.foxyvpn.ui.components.FlameBackdrop
 import com.vauth.foxyvpn.ui.components.FoxConnectButton
 import com.vauth.foxyvpn.ui.components.FoxMascot
 import com.vauth.foxyvpn.ui.components.FoxMood
 import com.vauth.foxyvpn.ui.components.GradientText
-import com.vauth.foxyvpn.ui.components.StaggeredEntrance
-import com.vauth.foxyvpn.ui.components.wiggleOnChange
+import com.vauth.foxyvpn.ui.components.RollingText
+import com.vauth.foxyvpn.ui.localizedCountryName
 import com.vauth.foxyvpn.ui.theme.FoxOrange
 import com.vauth.foxyvpn.ui.theme.LocalFoxyStatusColors
 import com.vauth.foxyvpn.ui.theme.ThemeController
@@ -223,8 +226,9 @@ fun HomeScreen(
                             AnimatedContent(
                                 targetState = mode,
                                 transitionSpec = {
-                                    (fadeIn(tween(220)) + slideInVertically { it / 2 }) togetherWith
-                                        (fadeOut(tween(160)) + slideOutVertically { -it / 2 })
+                                    (fadeIn(tween(200, delayMillis = 60)) +
+                                        scaleIn(tween(260, easing = EmphasizedEasing), initialScale = 0.6f)) togetherWith
+                                        (fadeOut(tween(100)) + scaleOut(tween(160), targetScale = 0.6f))
                                 },
                                 label = "theme-icon",
                             ) { current ->
@@ -292,7 +296,6 @@ fun HomeScreen(
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                             if (state == ConnectionState.DISCONNECTED) onRequestConnect() else onDisconnect()
                         },
-                        modifier = Modifier.wiggleOnChange(state),
                     )
 
                     Spacer(Modifier.height(12.dp))
@@ -300,8 +303,9 @@ fun HomeScreen(
                     AnimatedContent(
                         targetState = state,
                         transitionSpec = {
-                            (fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 2 }) togetherWith
-                                (fadeOut(tween(200)) + slideOutVertically(tween(200)) { -it / 2 })
+                            (fadeIn(tween(240, delayMillis = 80)) +
+                                slideInVertically(tween(360, easing = EmphasizedEasing)) { it / 4 }) togetherWith
+                                (fadeOut(tween(110)) + slideOutVertically(tween(160)) { -it / 6 })
                         },
                         label = "status-text",
                     ) { current ->
@@ -343,14 +347,9 @@ fun HomeScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         ConnectionState.CONNECTED ->
-                            Text(
+                            RollingText(
                                 text = formatDuration(elapsedSeconds),
-                                style =
-                                    MaterialTheme.typography.titleMedium.copy(
-                                        fontFeatureSettings = "tnum",
-                                        fontWeight = FontWeight.Bold,
-                                    ),
-                                color = MaterialTheme.colorScheme.onSurface,
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             )
                         ConnectionState.DISCONNECTED ->
                             Text(
@@ -378,7 +377,6 @@ fun HomeScreen(
                     Spacer(Modifier.height(20.dp))
 
                     // Location
-                    StaggeredEntrance(index = 0) {
                         Card(
                             onClick = onOpenServers,
                             modifier = Modifier.fillMaxWidth(),
@@ -415,8 +413,11 @@ fun HomeScreen(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                     val displayName =
-                                        displayProxy?.displayName?.ifBlank { displayProxy.countryCode }
-                                            ?: stringResource(R.string.home_recommended)
+                                        if (displayProxy != null) {
+                                            localizedCountryName(displayProxy.countryCode, displayProxy.displayName)
+                                        } else {
+                                            stringResource(R.string.home_recommended)
+                                        }
                                     AnimatedContent(
                                         targetState = displayName,
                                         transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(150)) },
@@ -434,10 +435,10 @@ fun HomeScreen(
                                             activeProxy != selectedProxy
                                     ) {
                                         val nextDisplayName =
-                                            selectedProxy
-                                                ?.displayName
-                                                ?.ifBlank { selectedProxy?.countryCode.orEmpty() }
-                                                .orEmpty()
+                                            localizedCountryName(
+                                                selectedProxy?.countryCode.orEmpty(),
+                                                selectedProxy?.displayName.orEmpty(),
+                                            )
                                         Text(
                                             stringResource(R.string.home_next_connection, nextDisplayName),
                                             style = MaterialTheme.typography.bodySmall,
@@ -452,12 +453,10 @@ fun HomeScreen(
                                 )
                             }
                         }
-                    }
 
                     Spacer(Modifier.height(12.dp))
 
                     // IP + protection badge
-                    StaggeredEntrance(index = 1) {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(20.dp),
@@ -541,12 +540,10 @@ fun HomeScreen(
                                 }
                             }
                         }
-                    }
 
                     Spacer(Modifier.height(12.dp))
 
                     // Traffic, latency & quota
-                    StaggeredEntrance(index = 2) {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(20.dp),
@@ -647,7 +644,6 @@ fun HomeScreen(
                                 )
                             }
                         }
-                    }
 
                     Spacer(Modifier.height(dynamicSpace))
                     Spacer(Modifier.height(8.dp))
@@ -681,19 +677,11 @@ private fun StatTile(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(2.dp))
-            AnimatedContent(
-                targetState = value,
-                transitionSpec = {
-                    (fadeIn(tween(200)) + slideInVertically { it / 3 }) togetherWith fadeOut(tween(120))
-                },
-                label = "stat-value",
-            ) { v ->
-                Text(
-                    v,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = valueColor,
-                )
-            }
+            RollingText(
+                text = value,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = valueColor,
+            )
         }
     }
 }

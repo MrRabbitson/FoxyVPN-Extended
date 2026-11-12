@@ -20,7 +20,7 @@ android {
     buildToolsVersion = "35.0.0"
 
     defaultConfig {
-        applicationId = "com.vauth.foxyvpn"
+        applicationId = "lol.mrrabbitson.foxyvpn"
         minSdk = 26
         targetSdk = 35
         versionCode = 49

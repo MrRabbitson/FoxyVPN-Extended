@@ -1,17 +1,21 @@
 package com.vauth.foxyvpn.ui.components
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -31,135 +35,282 @@ import com.vauth.foxyvpn.ui.theme.FurOrange
 import com.vauth.foxyvpn.ui.theme.FurOrangeDark
 import kotlin.math.PI
 import kotlin.math.sin
+import kotlin.random.Random
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 enum class FoxMood {
-    /** Disconnected: eyes closed, floating "z"s. */
+    /** Disconnected: asleep. */
     RESTING,
-    /** Connecting: looks around, head tilts. */
+    /** Connecting: awake, looking around. */
     SEARCHING,
-    /** Connected: awake, smiling, blinking. */
+    /** Connected: content, keeping watch. */
     GUARDING,
+}
+
+private const val EARS_DROOP = 9f
+private const val HEAD_DROP = 2.5f
+
+private val SoftInOut = CubicBezierEasing(0.4f, 0f, 0.2f, 1f)
+
+/**
+ * Everything that can move on the fox. Each value is driven independently so
+ * gestures can overlap (an ear can flick mid-blink) instead of the whole face
+ * running on one shared loop.
+ */
+private class FoxPose {
+    val eyeOpen = Animatable(1f)
+    val lookX = Animatable(0f)
+    val tilt = Animatable(0f)
+    val drop = Animatable(0f)
+    val earLeft = Animatable(0f)
+    val earRight = Animatable(0f)
+    val squash = Animatable(0f)
+    val joy = Animatable(0f)
+    val squint = Animatable(0f)
+    val asleep = Animatable(0f)
+
+    suspend fun snapTo(mood: FoxMood) {
+        val resting = mood == FoxMood.RESTING
+        eyeOpen.snapTo(if (resting) 0f else 1f)
+        lookX.snapTo(0f)
+        tilt.snapTo(0f)
+        drop.snapTo(if (resting) HEAD_DROP else 0f)
+        earLeft.snapTo(if (resting) EARS_DROOP else 0f)
+        earRight.snapTo(if (resting) EARS_DROOP else 0f)
+        squash.snapTo(0f)
+        joy.snapTo(if (mood == FoxMood.GUARDING) 1f else 0f)
+        squint.snapTo(0f)
+        asleep.snapTo(if (resting) 1f else 0f)
+    }
+
+    /** One-off acting when the mood changes. */
+    suspend fun transitionTo(mood: FoxMood) {
+        coroutineScope {
+            when (mood) {
+                FoxMood.RESTING -> {
+                    launch { joy.animateTo(0f, tween(300)) }
+                    launch { squint.animateTo(0f, tween(160)) }
+                    launch { lookX.animateTo(0f, tween(300, easing = SoftInOut)) }
+                    launch { tilt.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 120f)) }
+                    launch {
+                        // Fights sleep for a moment, then gives in.
+                        eyeOpen.animateTo(0.35f, tween(260, easing = SoftInOut))
+                        eyeOpen.animateTo(0.62f, tween(200, easing = SoftInOut))
+                        eyeOpen.animateTo(0f, tween(440, easing = SoftInOut))
+                    }
+                    launch { drop.animateTo(HEAD_DROP, tween(900, easing = SoftInOut)) }
+                    launch { earLeft.animateTo(EARS_DROOP, spring(dampingRatio = 0.6f, stiffness = 70f)) }
+                    launch {
+                        delay(90)
+                        earRight.animateTo(EARS_DROOP, spring(dampingRatio = 0.6f, stiffness = 70f))
+                    }
+                    launch {
+                        delay(900)
+                        asleep.animateTo(1f, tween(700))
+                    }
+                }
+                FoxMood.SEARCHING -> {
+                    launch { asleep.animateTo(0f, tween(140)) }
+                    launch { joy.animateTo(0f, tween(200)) }
+                    launch { squint.animateTo(0f, tween(160)) }
+                    launch { drop.animateTo(0f, spring(dampingRatio = 0.5f, stiffness = 220f)) }
+                    launch { eyeOpen.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 380f)) }
+                    launch { earLeft.animateTo(0f, spring(dampingRatio = 0.38f, stiffness = 260f)) }
+                    launch {
+                        delay(70)
+                        earRight.animateTo(0f, spring(dampingRatio = 0.38f, stiffness = 260f))
+                    }
+                }
+                FoxMood.GUARDING -> {
+                    launch { asleep.animateTo(0f, tween(140)) }
+                    launch { lookX.animateTo(0f, tween(220, easing = SoftInOut)) }
+                    launch { tilt.animateTo(0f, spring(dampingRatio = 0.5f, stiffness = 200f)) }
+                    launch { drop.animateTo(0f, spring(dampingRatio = 0.5f, stiffness = 220f)) }
+                    launch { eyeOpen.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 380f)) }
+                    launch { earLeft.animateTo(0f, spring(dampingRatio = 0.38f, stiffness = 260f)) }
+                    launch { earRight.animateTo(0f, spring(dampingRatio = 0.38f, stiffness = 260f)) }
+                    launch {
+                        // Anticipation, then a springy pop.
+                        squash.animateTo(0.08f, tween(110, easing = FastOutLinearInEasing))
+                        squash.animateTo(0f, spring(dampingRatio = 0.3f, stiffness = 420f))
+                    }
+                    launch { joy.animateTo(1f, tween(350)) }
+                    launch {
+                        squint.animateTo(1f, tween(140))
+                        delay(900)
+                        squint.animateTo(0f, tween(260))
+                    }
+                }
+            }
+        }
+    }
+
+    /** Small unscripted-looking movements, at irregular intervals. */
+    suspend fun idle(mood: FoxMood) {
+        coroutineScope {
+            when (mood) {
+                FoxMood.RESTING ->
+                    launch {
+                        while (true) {
+                            delay(Random.nextLong(5_000, 11_000))
+                            flickEar(rest = EARS_DROOP)
+                        }
+                    }
+                FoxMood.SEARCHING -> {
+                    launch { blinkLoop() }
+                    launch {
+                        delay(350)
+                        var side = if (Random.nextBoolean()) 1f else -1f
+                        while (true) {
+                            coroutineScope {
+                                launch { lookX.animateTo(side, tween(360, easing = FastOutSlowInEasing)) }
+                                launch {
+                                    // The head follows the eyes a beat later.
+                                    delay(70)
+                                    tilt.animateTo(side * 5f, spring(dampingRatio = 0.55f, stiffness = 160f))
+                                }
+                                launch {
+                                    delay(140)
+                                    val ear = if (side < 0f) earLeft else earRight
+                                    ear.animateTo(-7f, tween(110))
+                                    ear.animateTo(0f, spring(dampingRatio = 0.4f, stiffness = 300f))
+                                }
+                            }
+                            delay(Random.nextLong(420, 900))
+                            side = -side
+                        }
+                    }
+                }
+                FoxMood.GUARDING -> {
+                    launch { blinkLoop() }
+                    launch {
+                        while (true) {
+                            delay(Random.nextLong(4_500, 9_500))
+                            flickEar(rest = 0f)
+                        }
+                    }
+                    launch {
+                        while (true) {
+                            delay(Random.nextLong(7_000, 14_000))
+                            val side = if (Random.nextBoolean()) 0.7f else -0.7f
+                            lookX.animateTo(side, tween(260, easing = SoftInOut))
+                            delay(Random.nextLong(500, 1_100))
+                            lookX.animateTo(0f, tween(320, easing = SoftInOut))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun blinkLoop() {
+        while (true) {
+            delay(Random.nextLong(2_400, 6_000))
+            blink()
+            if (Random.nextInt(5) == 0) {
+                delay(120)
+                blink()
+            }
+        }
+    }
+
+    private suspend fun blink() {
+        eyeOpen.animateTo(0.05f, tween(70, easing = FastOutLinearInEasing))
+        eyeOpen.animateTo(1f, tween(130, easing = FastOutSlowInEasing))
+    }
+
+    private suspend fun flickEar(rest: Float) {
+        val ear = if (Random.nextBoolean()) earLeft else earRight
+        ear.animateTo(rest - 8f, tween(80))
+        ear.animateTo(rest, spring(dampingRatio = 0.35f, stiffness = 300f))
+    }
 }
 
 /**
  * FoxyVPN mascot, drawn in a 100×100 virtual canvas so it scales to any size.
- * Every mood has its own idle animation; transitions between moods are smooth.
+ * With [animated] off it holds the pose for [mood] and never moves (icons).
  */
 @Composable
 fun FoxMascot(mood: FoxMood, modifier: Modifier = Modifier, animated: Boolean = true) {
-    val transition = rememberInfiniteTransition(label = "fox")
+    val pose = remember { FoxPose() }
+    val started = remember { mutableStateOf(false) }
 
+    LaunchedEffect(mood, animated) {
+        if (!animated) {
+            pose.snapTo(mood)
+            return@LaunchedEffect
+        }
+        coroutineScope {
+            if (started.value) {
+                launch { pose.transitionTo(mood) }
+            } else {
+                pose.snapTo(mood)
+                started.value = true
+            }
+            launch {
+                // Let the transition finish before idle gestures touch the same parts.
+                delay(1_600)
+                pose.idle(mood)
+            }
+        }
+    }
+
+    val loop = rememberInfiniteTransition(label = "fox")
     val breath by
-        transition.animateFloat(
+        loop.animateFloat(
             initialValue = 0f,
             targetValue = 1f,
-            animationSpec =
-                infiniteRepeatable(
-                    tween(if (mood == FoxMood.RESTING) 3200 else 2200, easing = LinearEasing)
-                ),
+            animationSpec = infiniteRepeatable(tween(3_800, easing = LinearEasing)),
             label = "fox-breath",
         )
-    val blink by
-        transition.animateFloat(
-            initialValue = 1f,
-            targetValue = 1f,
-            animationSpec =
-                infiniteRepeatable(
-                    keyframes {
-                        durationMillis = 4200
-                        1f at 0
-                        1f at 3900
-                        0.08f at 3990
-                        1f at 4100
-                        1f at 4200
-                    }
-                ),
-            label = "fox-blink",
-        )
-    val earTwitch by
-        transition.animateFloat(
-            initialValue = 0f,
-            targetValue = 0f,
-            animationSpec =
-                infiniteRepeatable(
-                    keyframes {
-                        durationMillis = 5600
-                        0f at 0
-                        0f at 2600
-                        -12f at 2720
-                        4f at 2840
-                        -6f at 2950
-                        0f at 3100
-                        0f at 5600
-                    }
-                ),
-            label = "fox-ear",
-        )
-    val look by
-        transition.animateFloat(
-            initialValue = -1f,
-            targetValue = 1f,
-            animationSpec =
-                infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-            label = "fox-look",
-        )
-    val zz by
-        transition.animateFloat(
+    val drift by
+        loop.animateFloat(
             initialValue = 0f,
             targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(2600, easing = LinearEasing)),
+            animationSpec = infiniteRepeatable(tween(3_200, easing = LinearEasing)),
             label = "fox-zz",
         )
 
-    // Smoothly blend between moods.
-    val awake by
-        animateFloatAsState(
-            targetValue = if (mood == FoxMood.RESTING) 0f else 1f,
-            animationSpec = tween(450),
-            label = "fox-awake",
-        )
-    val searching by
-        animateFloatAsState(
-            targetValue = if (mood == FoxMood.SEARCHING) 1f else 0f,
-            animationSpec = tween(400),
-            label = "fox-searching",
-        )
-    val happy by
-        animateFloatAsState(
-            targetValue = if (mood == FoxMood.GUARDING) 1f else 0f,
-            animationSpec = tween(500),
-            label = "fox-happy",
-        )
-
-    val b = if (animated) breath else 0f
-    val wave = sin(b * 2 * PI).toFloat()
-
     Canvas(modifier) {
         val unit = size.minDimension / 100f
+        val asleep = pose.asleep.value
+        val breathing = if (animated) sin(breath * 2 * PI).toFloat() * (0.5f + 0.7f * asleep) else 0f
         translate(
             left = (size.width - 100f * unit) / 2f,
             top = (size.height - 100f * unit) / 2f,
         ) {
             scale(unit, unit, pivot = Offset.Zero) {
-                val bob = wave * (1.2f + (1f - awake) * 0.6f)
-                val tilt = if (animated) look * 7f * searching else 0f
-                translate(top = bob) {
-                    rotate(tilt, pivot = Offset(50f, 70f)) {
-                        drawFoxHead(
-                            earAngle = if (animated) earTwitch * awake else 0f,
-                            eyeOpen = awake * (if (animated) blink else 1f),
-                            lookX = if (animated) look * 3f * searching else 0f,
-                            happy = happy,
-                        )
+                val squash = pose.squash.value
+                translate(top = pose.drop.value + breathing) {
+                    rotate(pose.tilt.value, pivot = Offset(50f, 78f)) {
+                        scale(1f + squash * 0.6f, 1f - squash, pivot = Offset(50f, 92f)) {
+                            drawFoxHead(
+                                earLeft = pose.earLeft.value,
+                                earRight = pose.earRight.value,
+                                eyeOpen = pose.eyeOpen.value,
+                                lookX = pose.lookX.value,
+                                joy = pose.joy.value,
+                                squint = pose.squint.value,
+                            )
+                        }
                     }
                 }
-                if (awake < 0.99f && animated) drawSleepZ(zz, alpha = 1f - awake)
+                if (animated && asleep > 0.01f) drawSleepZ(drift, alpha = asleep)
             }
         }
     }
 }
 
-private fun DrawScope.drawFoxHead(earAngle: Float, eyeOpen: Float, lookX: Float, happy: Float) {
+private fun DrawScope.drawFoxHead(
+    earLeft: Float,
+    earRight: Float,
+    eyeOpen: Float,
+    lookX: Float,
+    joy: Float,
+    squint: Float,
+) {
     val furBrush =
         Brush.verticalGradient(
             listOf(FoxYellow, FurOrange, FurOrangeDark),
@@ -167,17 +318,16 @@ private fun DrawScope.drawFoxHead(earAngle: Float, eyeOpen: Float, lookX: Float,
             endY = 92f,
         )
 
-    // Ears (behind the head)
-    rotate(-earAngle, pivot = Offset(30f, 36f)) {
+    // Ears sit behind the head; positive angle folds them outwards.
+    rotate(-earLeft, pivot = Offset(28f, 40f)) {
         drawPath(earPath(left = true), furBrush)
         drawPath(innerEarPath(left = true), FurNose.copy(alpha = 0.85f))
     }
-    rotate(earAngle * 0.6f, pivot = Offset(70f, 36f)) {
+    rotate(earRight, pivot = Offset(72f, 40f)) {
         drawPath(earPath(left = false), furBrush)
         drawPath(innerEarPath(left = false), FurNose.copy(alpha = 0.85f))
     }
 
-    // Head
     val head =
         Path().apply {
             moveTo(50f, 24f)
@@ -191,7 +341,6 @@ private fun DrawScope.drawFoxHead(earAngle: Float, eyeOpen: Float, lookX: Float,
         }
     drawPath(head, furBrush)
 
-    // Cream mask
     val mask =
         Path().apply {
             moveTo(9f, 57f)
@@ -205,7 +354,6 @@ private fun DrawScope.drawFoxHead(earAngle: Float, eyeOpen: Float, lookX: Float,
         }
     drawPath(mask, FurCream)
 
-    // Forehead flame mark
     val flame =
         Path().apply {
             moveTo(50f, 30f)
@@ -215,37 +363,45 @@ private fun DrawScope.drawFoxHead(earAngle: Float, eyeOpen: Float, lookX: Float,
         }
     drawPath(flame, FoxYellow.copy(alpha = 0.75f))
 
-    // Blush (fades in when happy)
-    if (happy > 0f) {
-        val blush = Color(0xFFFF4F7B).copy(alpha = 0.35f * happy)
+    if (joy > 0.01f) {
+        val blush = Color(0xFFFF4F7B).copy(alpha = 0.35f * joy.coerceIn(0f, 1f))
         drawOval(blush, topLeft = Offset(20f, 64f), size = Size(10f, 6f))
         drawOval(blush, topLeft = Offset(70f, 64f), size = Size(10f, 6f))
     }
 
-    // Eyes
-    drawEye(cx = 35f + lookX, cy = 55f, open = eyeOpen)
-    drawEye(cx = 65f + lookX, cy = 55f, open = eyeOpen)
+    val gaze = lookX * 2.4f
+    drawEye(cx = 35f + gaze, cy = 55f, open = eyeOpen, squint = squint, gaze = lookX)
+    drawEye(cx = 65f + gaze, cy = 55f, open = eyeOpen, squint = squint, gaze = lookX)
 
-    // Nose
-    drawOval(FurNose, topLeft = Offset(45f, 73f), size = Size(10f, 7f))
-    drawOval(Color.White.copy(alpha = 0.5f), topLeft = Offset(47.5f, 74f), size = Size(3f, 2f))
+    // The muzzle trails the eyes slightly, which reads as the head turning.
+    val muzzle = lookX * 1.1f
+    drawOval(FurNose, topLeft = Offset(45f + muzzle, 73f), size = Size(10f, 7f))
+    drawOval(Color.White.copy(alpha = 0.5f), topLeft = Offset(47.5f + muzzle, 74f), size = Size(3f, 2f))
 
-    // Mouth: neutral line → smile as happiness grows
+    val smile = joy.coerceIn(0f, 1f)
     val mouth =
         Path().apply {
-            moveTo(50f, 80f)
-            lineTo(50f, 82f)
-            moveTo(50f, 82f)
-            quadraticTo(46f, 84f + 2f * happy, 43f, 82f - happy)
-            moveTo(50f, 82f)
-            quadraticTo(54f, 84f + 2f * happy, 57f, 82f - happy)
+            moveTo(50f + muzzle, 80f)
+            lineTo(50f + muzzle, 82f)
+            quadraticTo(46f + muzzle, 84f + 2.5f * smile, 43f + muzzle - smile, 82f - 1.5f * smile)
+            moveTo(50f + muzzle, 82f)
+            quadraticTo(54f + muzzle, 84f + 2.5f * smile, 57f + muzzle + smile, 82f - 1.5f * smile)
         }
     drawPath(mouth, FurNose, style = Stroke(width = 1.6f, cap = StrokeCap.Round))
 }
 
-private fun DrawScope.drawEye(cx: Float, cy: Float, open: Float) {
+private fun DrawScope.drawEye(cx: Float, cy: Float, open: Float, squint: Float, gaze: Float) {
+    if (squint > 0.5f) {
+        // Happy, smiling eyes.
+        val arc =
+            Path().apply {
+                moveTo(cx - 5f, cy + 1.5f)
+                quadraticTo(cx, cy - 5f, cx + 5f, cy + 1.5f)
+            }
+        drawPath(arc, FurNose, style = Stroke(width = 2.4f, cap = StrokeCap.Round))
+        return
+    }
     if (open < 0.18f) {
-        // Closed, sleepy arc
         val arc =
             Path().apply {
                 moveTo(cx - 5f, cy)
@@ -257,7 +413,7 @@ private fun DrawScope.drawEye(cx: Float, cy: Float, open: Float) {
     val h = 11f * open
     drawOval(FurNose, topLeft = Offset(cx - 4.5f, cy - h / 2f), size = Size(9f, h))
     if (open > 0.5f) {
-        drawCircle(Color.White, radius = 1.8f, center = Offset(cx + 1.5f, cy - h / 4f))
+        drawCircle(Color.White, radius = 1.8f, center = Offset(cx + 1.5f + gaze * 0.8f, cy - h / 4f))
     }
 }
 
@@ -289,14 +445,14 @@ private fun innerEarPath(left: Boolean): Path =
         close()
     }
 
-/** Three little "z"s drifting up and to the right while the fox sleeps. */
+/** Two "z"s drifting up from the sleeping fox. */
 private fun DrawScope.drawSleepZ(progress: Float, alpha: Float) {
-    for (i in 0 until 3) {
-        val p = (progress + i / 3f) % 1f
-        val zSize = 5f + 4f * p
-        val x = 80f + 12f * p
-        val y = 28f - 26f * p
-        val a = alpha * (if (p < 0.2f) p / 0.2f else 1f - (p - 0.2f) / 0.8f)
+    for (i in 0 until 2) {
+        val p = (progress + i * 0.5f) % 1f
+        val zSize = 4.5f + 4f * p
+        val x = 80f + 10f * p + sin(p * 2 * PI).toFloat() * 1.5f
+        val y = 28f - 24f * p
+        val fade = if (p < 0.25f) p / 0.25f else 1f - (p - 0.25f) / 0.75f
         val z =
             Path().apply {
                 moveTo(x, y)
@@ -306,7 +462,7 @@ private fun DrawScope.drawSleepZ(progress: Float, alpha: Float) {
             }
         drawPath(
             z,
-            FurOrangeDark.copy(alpha = a.coerceIn(0f, 1f)),
+            FurOrangeDark.copy(alpha = (alpha * fade).coerceIn(0f, 1f)),
             style = Stroke(width = 1.8f, cap = StrokeCap.Round),
         )
     }

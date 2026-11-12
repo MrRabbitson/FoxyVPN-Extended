@@ -3,7 +3,7 @@ name: Android CI
 on:
   push:
     tags: ["v*.*.*"]
-    branches: ["feature/**"]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -56,8 +56,8 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: test-build-${{ github.run_number }}
-          name: Тестовая сборка ${{ github.run_number }} (${{ github.ref_name }})
+          tag_name: build-${{ github.run_number }}
+          name: Сборка ${{ github.run_number }}
           target_commitish: ${{ github.sha }}
           prerelease: true
           body: |

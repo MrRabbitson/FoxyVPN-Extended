@@ -281,4 +281,14 @@
     <string name="login_error_timeout">Sign-in timed out. Try again.</string>
     <string name="login_error_failed">Sign-in failed. Try again.</string>
     <string name="session_clear_failed">Could not clear the session</string>
+    <!-- Connection errors -->
+    <string name="error_quota_exhausted">Your VPN quota is exhausted. Try again later.</string>
+    <string name="error_session_rejected">Your session was rejected. Please sign in again.</string>
+    <string name="error_guardian_unavailable">The Mozilla service is temporarily unavailable</string>
+    <string name="error_timed_out">The connection timed out</string>
+    <string name="error_connection_failed">Connection failed</string>
+    <string name="error_no_servers">No servers are available. Choose a location first.</string>
+    <string name="error_no_servers_location">No available servers in the selected location. Choose another location.</string>
+    <string name="session_changed_sign_out">Session changed. Try signing out again.</string>
+    <string name="update_network_error">network error</string>
 </resources>

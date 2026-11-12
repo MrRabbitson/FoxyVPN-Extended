@@ -30,7 +30,6 @@ import com.vauth.foxyvpn.data.GuardianHttpError
 import com.vauth.foxyvpn.data.ProxyPass
 import com.vauth.foxyvpn.data.ProxyStateStore
 import com.vauth.foxyvpn.data.QuotaExceededError
-import com.vauth.foxyvpn.data.RECOMMENDED_COUNTRY_CODE
 import com.vauth.foxyvpn.data.ServerListClient
 import com.vauth.foxyvpn.data.SettingsStore
 import com.vauth.foxyvpn.data.TokenInvalidError
@@ -635,13 +634,12 @@ class FoxyVpnService : VpnService() {
                         getString(com.vauth.foxyvpn.R.string.notif_proxy_active, "$socksBindAddress:$socksPort")
                     } else {
                         val name =
-                            if (primaryCandidate.countryCode.equals(RECOMMENDED_COUNTRY_CODE, ignoreCase = true) ||
-                                primaryCandidate.countryName.equals("Recomended", ignoreCase = true)
-                            ) {
-                                getString(com.vauth.foxyvpn.R.string.home_recommended)
-                            } else {
-                                primaryCandidate.countryName.ifBlank { primaryCandidate.countryCode }
-                            }
+                            com.vauth.foxyvpn.data.model.localizedCountryName(
+                                code = primaryCandidate.countryCode,
+                                rawName = primaryCandidate.countryName,
+                                locale = resources.configuration.locales[0],
+                                recommendedLabel = getString(com.vauth.foxyvpn.R.string.home_recommended),
+                            )
                         getString(com.vauth.foxyvpn.R.string.notif_connected, name)
                     }
 
@@ -944,8 +942,8 @@ class FoxyVpnService : VpnService() {
         val chosen =
             com.vauth.foxyvpn.data.preferredConnectionCandidates(candidates, saved).randomOrNull()
                 ?: throw IllegalArgumentException(
-                    if (saved == null) "No servers are available. Choose a location first."
-                    else "No available servers in the selected location. Choose another location."
+                    if (saved == null) getString(com.vauth.foxyvpn.R.string.error_no_servers)
+                    else getString(com.vauth.foxyvpn.R.string.error_no_servers_location)
                 )
 
         if (current == null) proxyStateStore.saveIfUnchanged(saved, chosen)
@@ -954,14 +952,14 @@ class FoxyVpnService : VpnService() {
 
     private fun friendlyErrorMessage(error: Throwable): String =
         when (error) {
-            is QuotaExceededError -> "Your VPN quota is exhausted. Try again later."
-            is TokenInvalidError -> "Your session was rejected. Please sign in again."
+            is QuotaExceededError -> getString(com.vauth.foxyvpn.R.string.error_quota_exhausted)
+            is TokenInvalidError -> getString(com.vauth.foxyvpn.R.string.error_session_rejected)
             is GuardianHttpError ->
                 if (error.statusCode in listOf(401, 403)) {
-                    "Your session was rejected. Please sign in again."
-                } else error.message ?: "Guardian is temporarily unavailable"
-            is TimeoutCancellationException -> "the connection timed out"
-            else -> error.message ?: (error::class.simpleName ?: "Connection failed")
+                    getString(com.vauth.foxyvpn.R.string.error_session_rejected)
+                } else error.message ?: getString(com.vauth.foxyvpn.R.string.error_guardian_unavailable)
+            is TimeoutCancellationException -> getString(com.vauth.foxyvpn.R.string.error_timed_out)
+            else -> error.message ?: (error::class.simpleName ?: getString(com.vauth.foxyvpn.R.string.error_connection_failed))
         }
 
     private fun teardown() {

@@ -287,4 +287,14 @@
     <string name="login_error_timeout">Время входа истекло. Попробуйте ещё раз.</string>
     <string name="login_error_failed">Не удалось войти. Попробуйте ещё раз.</string>
     <string name="session_clear_failed">Не удалось завершить сессию</string>
+    <!-- Connection errors -->
+    <string name="error_quota_exhausted">Лимит VPN-трафика исчерпан. Попробуйте позже.</string>
+    <string name="error_session_rejected">Сессия отклонена. Войдите заново.</string>
+    <string name="error_guardian_unavailable">Сервис Mozilla временно недоступен</string>
+    <string name="error_timed_out">Время ожидания подключения истекло</string>
+    <string name="error_connection_failed">Не удалось подключиться</string>
+    <string name="error_no_servers">Нет доступных серверов. Сначала выберите локацию.</string>
+    <string name="error_no_servers_location">В выбранной локации нет доступных серверов. Выберите другую.</string>
+    <string name="session_changed_sign_out">Сессия изменилась. Попробуйте выйти ещё раз.</string>
+    <string name="update_network_error">ошибка сети</string>
 </resources>

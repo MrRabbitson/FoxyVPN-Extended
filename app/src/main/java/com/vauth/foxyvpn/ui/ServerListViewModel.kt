@@ -4,9 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.vauth.foxyvpn.data.AppLogger
 import com.vauth.foxyvpn.data.ProxyStateStore
 import com.vauth.foxyvpn.data.ServerListClient
 import com.vauth.foxyvpn.data.model.ProxyCandidate
+import com.vauth.foxyvpn.data.model.RECOMMENDED_COUNTRY_CODE
 import com.vauth.foxyvpn.data.model.VpnCountry
 import com.vauth.foxyvpn.vpn.PingUtil
 import kotlinx.coroutines.CancellationException
@@ -38,12 +40,13 @@ data class ServerListUiState(
 class ServerListViewModel(
     private val serverListClient: ServerListClient,
     private val proxyStateStore: ProxyStateStore,
+    private val loadFailedMessage: String,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ServerListUiState())
     val state: StateFlow<ServerListUiState> = _state.asStateFlow()
 
-    private val probeSlots = Semaphore(4)
+    private val probeSlots = Semaphore(8)
 
     init {
         loadServerList(force = false)
@@ -58,6 +61,7 @@ class ServerListViewModel(
                 val cached = withContext(Dispatchers.IO) { serverListClient.loadCachedCountries() }
                 if (cached.isNotEmpty()) {
                     _state.update { it.copy(countries = cached, isLoading = false) }
+                    probeAll(cached)
                 }
             }
             try {
@@ -72,15 +76,31 @@ class ServerListViewModel(
                         directoryRevision = current.directoryRevision + 1,
                     )
                 }
+                probeAll(fresh)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
+                AppLogger.w("ServerList", "could not load the server directory", error)
                 _state.update { current ->
                     current.copy(
                         isLoading = false,
-                        errorMessage = error.message ?: "Failed to load server list",
+                        errorMessage = loadFailedMessage,
                     )
                 }
+            }
+        }
+    }
+
+    /** Measures every city up front so the list can be ordered by latency. */
+    private fun probeAll(countries: List<VpnCountry>) {
+        for (country in countries) {
+            if (country.code.equals(RECOMMENDED_COUNTRY_CODE, ignoreCase = true)) continue
+            for (city in country.cities) {
+                probeCityLatency(
+                    country.code,
+                    city.code,
+                    ServerListClient.candidatesForCity(countries, country.code, city.code),
+                )
             }
         }
     }
@@ -139,9 +159,12 @@ class ServerListViewModel(
     }
 
     companion object {
-        fun factory(serverListClient: ServerListClient, proxyStateStore: ProxyStateStore) =
-            viewModelFactory {
-                initializer { ServerListViewModel(serverListClient, proxyStateStore) }
-            }
+        fun factory(
+            serverListClient: ServerListClient,
+            proxyStateStore: ProxyStateStore,
+            loadFailedMessage: String,
+        ) = viewModelFactory {
+            initializer { ServerListViewModel(serverListClient, proxyStateStore, loadFailedMessage) }
+        }
     }
 }

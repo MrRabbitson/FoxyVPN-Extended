@@ -1,13 +1,11 @@
 package com.vauth.foxyvpn.ui.navigation
 
 import android.net.ConnectivityManager
-import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -15,6 +13,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -24,6 +24,7 @@ import androidx.navigation.compose.rememberNavController
 import com.vauth.foxyvpn.AppContainer
 import com.vauth.foxyvpn.ui.HomeViewModel
 import com.vauth.foxyvpn.ui.ServerListViewModel
+import com.vauth.foxyvpn.ui.components.EmphasizedEasing
 import com.vauth.foxyvpn.ui.screens.HomeScreen
 import com.vauth.foxyvpn.ui.screens.LoginScreen
 import com.vauth.foxyvpn.ui.screens.LogsScreen
@@ -55,26 +56,25 @@ fun FoxyNavGraph(
     val context = LocalContext.current
     val sessionScope = rememberCoroutineScope()
     var signingOut by remember { mutableStateOf(false) }
+    // Shared-axis motion: screens slide a short distance and cross-fade, with
+    // the outgoing one gone before the incoming one is fully opaque.
+    val shift = with(LocalDensity.current) { 30.dp.roundToPx() }
     NavHost(
         navController = navController,
         startDestination = FoxyRoutes.SPLASH,
         enterTransition = {
-            fadeIn(tween(320)) +
-                slideIntoContainer(
-                    AnimatedContentTransitionScope.SlideDirection.Start,
-                    tween(380, easing = FastOutSlowInEasing),
-                    initialOffset = { it / 4 },
-                )
+            slideInHorizontally(tween(320, easing = EmphasizedEasing)) { shift } +
+                fadeIn(tween(210, delayMillis = 90))
         },
-        exitTransition = { fadeOut(tween(220)) + scaleOut(tween(300), targetScale = 0.94f) },
-        popEnterTransition = { fadeIn(tween(320)) + scaleIn(tween(320), initialScale = 0.94f) },
+        exitTransition = {
+            slideOutHorizontally(tween(320, easing = EmphasizedEasing)) { -shift } + fadeOut(tween(90))
+        },
+        popEnterTransition = {
+            slideInHorizontally(tween(320, easing = EmphasizedEasing)) { -shift } +
+                fadeIn(tween(210, delayMillis = 90))
+        },
         popExitTransition = {
-            fadeOut(tween(220)) +
-                slideOutOfContainer(
-                    AnimatedContentTransitionScope.SlideDirection.End,
-                    tween(320, easing = FastOutSlowInEasing),
-                    targetOffset = { it / 4 },
-                )
+            slideOutHorizontally(tween(320, easing = EmphasizedEasing)) { shift } + fadeOut(tween(90))
         },
     ) {
         composable(FoxyRoutes.SPLASH) {
@@ -132,6 +132,7 @@ fun FoxyNavGraph(
                         ServerListViewModel.factory(
                             serverListClient = container.serverListClient,
                             proxyStateStore = container.proxyStateStore,
+                            loadFailedMessage = context.getString(com.vauth.foxyvpn.R.string.server_list_load_failed),
                         )
                 )
             ServerListScreen(
@@ -172,7 +173,7 @@ fun FoxyNavGraph(
                         try {
                             withContext(Dispatchers.IO) {
                                 check(container.tokenStore.clearIfCurrent(epoch)) {
-                                    "Session changed. Try signing out again."
+                                    context.getString(com.vauth.foxyvpn.R.string.session_changed_sign_out)
                                 }
                                 com.vauth.foxyvpn.data.ControlPlaneHttp.cookieJar.clear()
                                 container.settingsStore.clearAccountSession()
