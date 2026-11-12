@@ -61,7 +61,7 @@ jobs:
           target_commitish: ${{ github.sha }}
           prerelease: true
           body: |
-Сборка из ветки `${{ github.ref_name }}` (коммит ${{ github.sha }}).
+            Сборка из ветки `${{ github.ref_name }}` (коммит ${{ github.sha }}).
             Бери файл `release`; `arm64-v8a` подходит большинству телефонов, если не уверен — `universal`.
             Файлы `debug` нужны только для отладки.
           files: |
