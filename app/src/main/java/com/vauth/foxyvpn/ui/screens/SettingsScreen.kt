@@ -1,6 +1,7 @@
 package com.vauth.foxyvpn.ui.screens
 
 import android.content.Intent
+import com.vauth.foxyvpn.ui.localizedLabel
 import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
 import android.widget.Toast
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -327,6 +329,24 @@ fun SettingsScreen(
         )
     }
 
+    var appLanguage by remember { mutableStateOf(com.vauth.foxyvpn.ui.settings.AppLanguage.current(context)) }
+    var showLanguageDialog by remember { mutableStateOf(false) }
+    if (showLanguageDialog) {
+        com.vauth.foxyvpn.ui.settings.LanguagePickerDialog(
+            current = appLanguage,
+            onDismiss = { showLanguageDialog = false },
+            onConfirm = { tag ->
+                showLanguageDialog = false
+                if (tag != appLanguage) {
+                    appLanguage = tag
+                    (context as? android.app.Activity)?.let {
+                        com.vauth.foxyvpn.ui.settings.AppLanguage.set(it, tag)
+                    }
+                }
+            },
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -343,6 +363,20 @@ fun SettingsScreen(
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
+            SectionLabel(stringResource(R.string.settings_section_appearance))
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_language)) },
+                supportingContent = { Text(com.vauth.foxyvpn.ui.settings.languageLabel(appLanguage)) },
+                leadingContent = {
+                    Icon(Icons.Filled.Translate, contentDescription = null)
+                },
+                trailingContent = {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                },
+                modifier = Modifier.clickable { showLanguageDialog = true },
+            )
+
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
             SectionLabel(stringResource(R.string.settings_section_connection))
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_always_on_vpn)) },
@@ -360,7 +394,7 @@ fun SettingsScreen(
                             .onFailure {
                                 android.widget.Toast.makeText(
                                         context,
-                                        "VPN settings are unavailable on this device",
+                                        context.getString(R.string.settings_vpn_unavailable),
                                         android.widget.Toast.LENGTH_SHORT,
                                     )
                                     .show()
@@ -392,8 +426,8 @@ fun SettingsScreen(
                     val subtitle =
                         when (dnsProvider) {
                             SettingsStore.DnsProvider.CUSTOM ->
-                                customDohUrl.ifBlank { "Custom DoH" }
-                            else -> dnsProvider.label
+                                customDohUrl.ifBlank { dnsProvider.localizedLabel() }
+                            else -> dnsProvider.localizedLabel()
                         }
                     Text(subtitle)
                 },
@@ -408,8 +442,8 @@ fun SettingsScreen(
                     val subtitle =
                         when (bootstrapDnsProvider) {
                             SettingsStore.DnsProvider.CUSTOM ->
-                                customBootstrapDohUrl.ifBlank { "Custom DoH" }
-                            else -> bootstrapDnsProvider.label
+                                customBootstrapDohUrl.ifBlank { bootstrapDnsProvider.localizedLabel() }
+                            else -> bootstrapDnsProvider.localizedLabel()
                         }
                     Text(subtitle)
                 },
@@ -646,9 +680,9 @@ fun SettingsScreen(
                         } else if (tlsFragmentMode == SettingsStore.TlsFragmentMode.OFF) {
                             stringResource(R.string.settings_disabled)
                         } else if (tlsFragmentMode == SettingsStore.TlsFragmentMode.RECORD) {
-                            tlsFragmentMode.label
+                            tlsFragmentMode.localizedLabel()
                         } else {
-                            "${tlsFragmentMode.label}, ${fragmentFallbackDelay}ms"
+                            "${tlsFragmentMode.localizedLabel()}, ${stringResource(R.string.unit_ms, fragmentFallbackDelay)}"
                         }
                     )
                 },
@@ -664,9 +698,9 @@ fun SettingsScreen(
                 supportingContent = {
                     Text(
                         if (httpVersion == SettingsStore.HttpVersion.HTTP_3) {
-                            "${utlsFingerprint.label} • ${stringResource(R.string.settings_tcp_only_notice)}"
+                            "${utlsFingerprint.localizedLabel()} • ${stringResource(R.string.settings_tcp_only_notice)}"
                         } else {
-                            utlsFingerprint.label
+                            utlsFingerprint.localizedLabel()
                         }
                     )
                 },

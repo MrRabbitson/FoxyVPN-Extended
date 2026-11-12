@@ -3,7 +3,9 @@ package com.vauth.foxyvpn.ui.theme
 import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -16,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import com.vauth.foxyvpn.data.ThemeMode
 
@@ -99,10 +102,20 @@ private val DarkColors =
         scrim = md_theme_dark_scrim,
     )
 
+val FoxyShapes =
+    Shapes(
+        extraSmall = RoundedCornerShape(8.dp),
+        small = RoundedCornerShape(12.dp),
+        medium = RoundedCornerShape(16.dp),
+        large = RoundedCornerShape(24.dp),
+        extraLarge = RoundedCornerShape(32.dp),
+    )
+
 @Composable
 fun FoxyVpnTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
-    dynamicColor: Boolean = true,
+    // Firefox branding: keep the orange palette instead of Material You wallpaper colors.
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val systemInDarkTheme = isSystemInDarkTheme()
@@ -140,6 +153,7 @@ fun FoxyVpnTheme(
         MaterialExpressiveTheme(
             colorScheme = colorScheme,
             typography = FoxyTypography,
+            shapes = FoxyShapes,
             motionScheme = MotionScheme.expressive(),
             content = content,
         )

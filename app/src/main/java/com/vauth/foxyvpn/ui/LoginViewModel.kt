@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.vauth.foxyvpn.R
 import com.vauth.foxyvpn.data.FxaAuthRepository
 import com.vauth.foxyvpn.data.isUnconfirmedSession
 import kotlinx.coroutines.CancellationException
@@ -23,7 +24,10 @@ data class LoginUiState(
     val signedIn: Boolean = false,
 )
 
-class LoginViewModel(private val repository: FxaAuthRepository) : ViewModel() {
+class LoginViewModel(
+    private val repository: FxaAuthRepository,
+    private val strings: (Int) -> String = { "" },
+) : ViewModel() {
     private val _uiState = MutableStateFlow(LoginUiState())
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
@@ -72,16 +76,16 @@ class LoginViewModel(private val repository: FxaAuthRepository) : ViewModel() {
                             _uiState.update { it.copy(browserStartUrl = null, signedIn = true) }
                         }
                         .onFailure {
-                            _uiState.update { s -> s.copy(errorMessage = it.message ?: "Browser sign-in failed. Please try again.") }
+                            _uiState.update { s -> s.copy(errorMessage = it.message ?: strings(R.string.login_error_browser)) }
                         }
                 } catch (_: TimeoutCancellationException) {
                     if (generation == requestGeneration)
-                        _uiState.update { it.copy(errorMessage = "Sign-in timed out. Try again.") }
+                        _uiState.update { it.copy(errorMessage = strings(R.string.login_error_timeout)) }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
                     if (generation == requestGeneration)
-                        _uiState.update { it.copy(errorMessage = "Sign-in failed. Try again.") }
+                        _uiState.update { it.copy(errorMessage = strings(R.string.login_error_failed)) }
                 } finally {
                     if (generation == requestGeneration)
                         _uiState.update { it.copy(isLoading = false) }
@@ -106,18 +110,18 @@ class LoginViewModel(private val repository: FxaAuthRepository) : ViewModel() {
                         .onFailure {
                             if (!it.isUnconfirmedSession()) {
                                 _uiState.update { s ->
-                                    s.copy(errorMessage = it.message ?: "Browser sign-in failed. Please try again.")
+                                    s.copy(errorMessage = it.message ?: strings(R.string.login_error_browser))
                                 }
                             }
                         }
                 } catch (_: TimeoutCancellationException) {
                     if (generation == requestGeneration)
-                        _uiState.update { it.copy(errorMessage = "Sign-in timed out. Try again.") }
+                        _uiState.update { it.copy(errorMessage = strings(R.string.login_error_timeout)) }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
                     if (generation == requestGeneration)
-                        _uiState.update { it.copy(errorMessage = "Sign-in failed. Try again.") }
+                        _uiState.update { it.copy(errorMessage = strings(R.string.login_error_failed)) }
                 } finally {
                     if (generation == requestGeneration)
                         _uiState.update { it.copy(isLoading = false) }
@@ -126,8 +130,8 @@ class LoginViewModel(private val repository: FxaAuthRepository) : ViewModel() {
     }
 
     companion object {
-        fun factory(repository: FxaAuthRepository) = viewModelFactory {
-            initializer { LoginViewModel(repository) }
+        fun factory(repository: FxaAuthRepository, strings: (Int) -> String) = viewModelFactory {
+            initializer { LoginViewModel(repository, strings) }
         }
     }
 }

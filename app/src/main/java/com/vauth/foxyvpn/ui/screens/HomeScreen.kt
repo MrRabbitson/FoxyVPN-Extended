@@ -1,9 +1,18 @@
 package com.vauth.foxyvpn.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,12 +36,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.DataUsage
+import androidx.compose.material.icons.filled.GppMaybe
 import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Power
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -42,6 +55,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -51,6 +65,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
@@ -67,6 +83,14 @@ import com.vauth.foxyvpn.data.model.ConnectionState
 import com.vauth.foxyvpn.data.model.displayName
 import com.vauth.foxyvpn.data.model.emojiFlag
 import com.vauth.foxyvpn.ui.HomeViewModel
+import com.vauth.foxyvpn.ui.components.FlameBackdrop
+import com.vauth.foxyvpn.ui.components.FoxConnectButton
+import com.vauth.foxyvpn.ui.components.FoxMascot
+import com.vauth.foxyvpn.ui.components.FoxMood
+import com.vauth.foxyvpn.ui.components.GradientText
+import com.vauth.foxyvpn.ui.components.StaggeredEntrance
+import com.vauth.foxyvpn.ui.components.wiggleOnChange
+import com.vauth.foxyvpn.ui.theme.FoxOrange
 import com.vauth.foxyvpn.ui.theme.LocalFoxyStatusColors
 import com.vauth.foxyvpn.ui.theme.ThemeController
 import com.vauth.foxyvpn.vpn.FoxyVpnService
@@ -101,20 +125,15 @@ fun HomeScreen(
         if (state == ConnectionState.DISCONNECTED) selectedProxy else activeProxy ?: selectedProxy
 
     val statusColors = LocalFoxyStatusColors.current
-    val targetRingColor =
-        when (state) {
-            ConnectionState.CONNECTED -> statusColors.connected
-            ConnectionState.CONNECTING -> statusColors.connecting
-            ConnectionState.DISCONNECTED -> MaterialTheme.colorScheme.outline
-        }
-
-    val ringColor by
-        animateColorAsState(targetValue = targetRingColor, label = "connect-ring-color")
-    val scale by
-        animateFloatAsState(
-            targetValue = if (state == ConnectionState.CONNECTED) 1f else 0.92f,
-            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-            label = "connect-scale",
+    val statusColor by
+        animateColorAsState(
+            targetValue =
+                when (state) {
+                    ConnectionState.CONNECTED -> statusColors.connected
+                    ConnectionState.CONNECTING -> statusColors.connecting
+                    ConnectionState.DISCONNECTED -> MaterialTheme.colorScheme.onSurface
+                },
+            label = "status-color",
         )
 
     val systemInDarkTheme = isSystemInDarkTheme()
@@ -150,410 +169,530 @@ fun HomeScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.app_name)) },
-                actions = {
-                    val mode = themeController.mode
-                    val showingDark = themeController.resolveDark(systemInDarkTheme)
-                    Box(
-                        modifier =
-                            Modifier.size(48.dp)
-                                .clip(CircleShape)
-                                .combinedClickable(
-                                    role = Role.Button,
-                                    onClick = { themeController.toggle(systemInDarkTheme) },
-                                    onLongClick = {
-                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        themeController.set(ThemeMode.SYSTEM)
-                                    },
-                                ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector =
-                                when (mode) {
-                                    ThemeMode.SYSTEM -> Icons.Filled.BrightnessAuto
-                                    ThemeMode.LIGHT -> Icons.Filled.LightMode
-                                    ThemeMode.DARK -> Icons.Filled.DarkMode
-                                },
-                            contentDescription =
-                                when (mode) {
-                                    ThemeMode.SYSTEM ->
-                                        if (showingDark) {
-                                            stringResource(R.string.theme_desc_system_light)
-                                        } else {
-                                            stringResource(R.string.theme_desc_system_dark)
-                                        }
-                                    ThemeMode.LIGHT ->
-                                        stringResource(R.string.theme_desc_light)
-                                    ThemeMode.DARK ->
-                                        stringResource(R.string.theme_desc_dark)
-                                },
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(
-                            imageVector = Icons.Filled.Settings,
-                            contentDescription = stringResource(R.string.settings_title),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        FlameBackdrop(
+            modifier = Modifier.fillMaxSize(),
+            intensity =
+                when (state) {
+                    ConnectionState.CONNECTED -> 1f
+                    ConnectionState.CONNECTING -> 0.6f
+                    ConnectionState.DISCONNECTED -> 0f
                 },
-            )
-        }
-    ) { padding ->
-        BoxWithConstraints(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentAlignment = Alignment.TopCenter,
-        ) {
-            val scrollState = rememberScrollState()
-            val heroGap = 18.dp
-            val naturalContentHeight = 566.dp
-            val availableExtra = (maxHeight - naturalContentHeight).coerceAtLeast(0.dp)
-            val dynamicSpace = if (availableExtra > 0.dp) (availableExtra / 2) else 16.dp
+        )
 
-            Column(
-                modifier =
-                    Modifier.widthIn(max = 520.dp)
-                        .fillMaxWidth()
-                        .verticalScroll(scrollState, enabled = scrollState.maxValue > 0)
-                        .padding(horizontal = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Spacer(Modifier.height(dynamicSpace))
-
-                Box(
-                    modifier =
-                        Modifier.size(180.dp)
-                            .clip(CircleShape)
-                            .background(ringColor.copy(alpha = 0.15f))
-                            .clickable(role = Role.Button) {
-                                if (state == ConnectionState.DISCONNECTED) onRequestConnect()
-                                else onDisconnect()
-                            },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Box(
-                        modifier =
-                            Modifier.size((140 * scale).dp)
-                                .clip(CircleShape)
-                                .background(ringColor.copy(alpha = 0.25f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Power,
-                            contentDescription =
-                                if (state == ConnectionState.DISCONNECTED) "Connect"
-                                else "Disconnect",
-                            tint = ringColor,
-                            modifier = Modifier.size(56.dp),
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(heroGap))
-
-                Text(
-                    text =
-                        when (state) {
-                            ConnectionState.CONNECTED -> "Connected"
-                            ConnectionState.CONNECTING -> "Connecting\u2026"
-                            ConnectionState.DISCONNECTED -> "Disconnected"
-                        },
-                    style =
-                        MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                )
-
-                Spacer(Modifier.height(4.dp))
-
-                if (state == ConnectionState.CONNECTING) {
-                    Text(
-                        if (lastError != null) "Retrying connection\u2026 Tap to cancel" else "Tap to cancel",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else {
-                    Text(
-                        text =
-                            if (state == ConnectionState.CONNECTED) formatDuration(elapsedSeconds)
-                            else "00:00:00",
-                        style =
-                            MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                val error = lastError
-                if (error != null && state != ConnectionState.CONNECTING) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = error,
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    )
-                }
-
-                Spacer(Modifier.height(heroGap))
-
-                Card(
-                    onClick = onOpenServers,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
+                TopAppBar(
                     colors =
-                        CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        TopAppBarDefaults.topAppBarColors(
+                            containerColor = Color.Transparent,
+                            scrolledContainerColor = Color.Transparent,
                         ),
-                ) {
-                    Column(Modifier.padding(16.dp)) {
-                        Text(
-                            "Location",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.padding(top = 4.dp))
+                    title = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            val flag = displayProxy?.emojiFlag
-                            if (!flag.isNullOrBlank()) {
-                                Text(flag, style = MaterialTheme.typography.titleMedium)
-                            } else {
-                                Icon(imageVector = Icons.Filled.Public, contentDescription = null)
-                            }
-                            Spacer(Modifier.padding(start = 8.dp))
-                            val displayName =
-                                displayProxy?.displayName?.ifBlank { displayProxy.countryCode }
-                                    ?: stringResource(R.string.home_recommended)
-                            Text(
-                                displayName,
-                                style = MaterialTheme.typography.bodyLarge,
+                            FoxMascot(
+                                mood = FoxMood.GUARDING,
+                                modifier = Modifier.size(30.dp),
+                                animated = false,
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            GradientText(
+                                stringResource(R.string.app_name),
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
                             )
                         }
-                        if (
-                            state != ConnectionState.DISCONNECTED &&
-                                activeProxy != null &&
-                                selectedProxy != null &&
-                                activeProxy != selectedProxy
+                    },
+                    actions = {
+                        val mode = themeController.mode
+                        val showingDark = themeController.resolveDark(systemInDarkTheme)
+                        Box(
+                            modifier =
+                                Modifier.size(48.dp)
+                                    .clip(CircleShape)
+                                    .combinedClickable(
+                                        role = Role.Button,
+                                        onClick = { themeController.toggle(systemInDarkTheme) },
+                                        onLongClick = {
+                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            themeController.set(ThemeMode.SYSTEM)
+                                        },
+                                    ),
+                            contentAlignment = Alignment.Center,
                         ) {
-                            val nextDisplayName =
-                                selectedProxy?.displayName?.ifBlank { selectedProxy?.countryCode.orEmpty() }.orEmpty()
+                            AnimatedContent(
+                                targetState = mode,
+                                transitionSpec = {
+                                    (fadeIn(tween(220)) + slideInVertically { it / 2 }) togetherWith
+                                        (fadeOut(tween(160)) + slideOutVertically { -it / 2 })
+                                },
+                                label = "theme-icon",
+                            ) { current ->
+                                Icon(
+                                    imageVector =
+                                        when (current) {
+                                            ThemeMode.SYSTEM -> Icons.Filled.BrightnessAuto
+                                            ThemeMode.LIGHT -> Icons.Filled.LightMode
+                                            ThemeMode.DARK -> Icons.Filled.DarkMode
+                                        },
+                                    contentDescription =
+                                        when (current) {
+                                            ThemeMode.SYSTEM ->
+                                                if (showingDark) {
+                                                    stringResource(R.string.theme_desc_system_light)
+                                                } else {
+                                                    stringResource(R.string.theme_desc_system_dark)
+                                                }
+                                            ThemeMode.LIGHT -> stringResource(R.string.theme_desc_light)
+                                            ThemeMode.DARK -> stringResource(R.string.theme_desc_dark)
+                                        },
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        IconButton(onClick = onOpenSettings) {
+                            Icon(
+                                imageVector = Icons.Filled.Settings,
+                                contentDescription = stringResource(R.string.settings_title),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                )
+            },
+        ) { padding ->
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.TopCenter,
+            ) {
+                val scrollState = rememberScrollState()
+                val naturalContentHeight = 640.dp
+                val availableExtra = (maxHeight - naturalContentHeight).coerceAtLeast(0.dp)
+                val dynamicSpace = if (availableExtra > 0.dp) (availableExtra / 2) else 8.dp
+
+                Column(
+                    modifier =
+                        Modifier.widthIn(max = 520.dp)
+                            .fillMaxWidth()
+                            .verticalScroll(scrollState, enabled = scrollState.maxValue > 0)
+                            .padding(horizontal = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Spacer(Modifier.height(dynamicSpace))
+
+                    FoxConnectButton(
+                        state = state,
+                        contentDescription =
+                            if (state == ConnectionState.DISCONNECTED) {
+                                stringResource(R.string.home_connect)
+                            } else {
+                                stringResource(R.string.home_disconnect)
+                            },
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            if (state == ConnectionState.DISCONNECTED) onRequestConnect() else onDisconnect()
+                        },
+                        modifier = Modifier.wiggleOnChange(state),
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+
+                    AnimatedContent(
+                        targetState = state,
+                        transitionSpec = {
+                            (fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 2 }) togetherWith
+                                (fadeOut(tween(200)) + slideOutVertically(tween(200)) { -it / 2 })
+                        },
+                        label = "status-text",
+                    ) { current ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                stringResource(R.string.home_next_connection, nextDisplayName),
+                                text =
+                                    when (current) {
+                                        ConnectionState.CONNECTED -> stringResource(R.string.quick_connect_connected)
+                                        ConnectionState.CONNECTING -> stringResource(R.string.quick_connect_connecting)
+                                        ConnectionState.DISCONNECTED -> stringResource(R.string.quick_connect_disconnected)
+                                    },
+                                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
+                                color = statusColor,
+                            )
+                            Text(
+                                text =
+                                    when (current) {
+                                        ConnectionState.CONNECTED -> stringResource(R.string.home_mascot_guarding)
+                                        ConnectionState.CONNECTING -> stringResource(R.string.home_mascot_searching)
+                                        ConnectionState.DISCONNECTED -> stringResource(R.string.home_mascot_resting)
+                                    },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(4.dp))
+
+                    when (state) {
+                        ConnectionState.CONNECTING ->
+                            Text(
+                                if (lastError != null) {
+                                    stringResource(R.string.home_retrying_tap_to_cancel)
+                                } else {
+                                    stringResource(R.string.home_tap_to_cancel)
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors =
-                        CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        ),
-                ) {
-                    Column(Modifier.padding(16.dp)) {
-                        val isConnected = state == ConnectionState.CONNECTED
-                        val ipDisplay =
-                            if (isConnected) {
-                                vpnEdgeIp?.let {
-                                    if (it.countryCode.isNotEmpty()) "${it.ip} • ${it.countryCode}"
-                                    else it.ip
-                                } ?: "\u2014"
-                            } else {
-                                realIp?.let {
-                                    if (it.countryCode.isNotEmpty()) "${it.ip} • ${it.countryCode}"
-                                    else it.ip
-                                } ?: "\u2014"
-                            }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "Current IP",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                Spacer(Modifier.height(2.dp))
-                                Text(
-                                    ipDisplay,
-                                    style =
-                                        MaterialTheme.typography.bodyLarge.copy(
-                                            fontWeight = FontWeight.Bold
-                                        ),
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                )
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            val badgeColor =
-                                if (isConnected) statusColors.connected
-                                else MaterialTheme.colorScheme.error
-                            val badgeBg = badgeColor.copy(alpha = 0.15f)
-                            Box(
-                                modifier =
-                                    Modifier.clip(RoundedCornerShape(6.dp))
-                                        .background(badgeBg)
-                                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                            ) {
-                                Text(
-                                    if (isConnected) {
-                                        if (proxyOnlyActive) "Proxy active" else "Protected"
-                                    } else "Exposed",
-                                    style =
-                                        MaterialTheme.typography.labelSmall.copy(
-                                            fontWeight = FontWeight.Bold
-                                        ),
-                                    color = badgeColor,
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors =
-                        CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        ),
-                ) {
-                    Column(Modifier.padding(16.dp)) {
-                        val isConnected = state == ConnectionState.CONNECTED
-                        val remaining = quotaRemaining
-                        val max = quotaMax
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "Data Used",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                Spacer(Modifier.height(2.dp))
-                                Text(
-                                    if (isConnected) formatBytes(liveStats.sessionBytes)
-                                    else "0.0 MB",
-                                    style =
-                                        MaterialTheme.typography.titleMedium.copy(
-                                            fontWeight = FontWeight.Bold
-                                        ),
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                )
-                            }
-                            Column(
-                                modifier =
-                                    Modifier.weight(1f)
-                                        .heightIn(min = 48.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .clickable(
-                                            enabled = isConnected && !isPinging,
-                                            role = Role.Button,
-                                        ) {
-                                            haptics.performHapticFeedback(
-                                                HapticFeedbackType.LongPress
-                                            )
-                                            homeModel.triggerPing()
-                                        }
-                            ) {
-                                Text(
-                                    stringResource(R.string.home_latency),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                Spacer(Modifier.height(2.dp))
-                                val currentPing = if (isConnected) pingLatency else null
-                                Text(
-                                    text =
-                                        when {
-                                            isPinging -> stringResource(R.string.home_pinging)
-                                            currentPing != null -> "$currentPing ms"
-                                            else -> "\u2014 ms"
-                                        },
-                                    style =
-                                        MaterialTheme.typography.titleMedium.copy(
-                                            fontWeight = FontWeight.Bold
-                                        ),
-                                    color =
-                                        if (currentPing != null) statusColors.connected
-                                        else MaterialTheme.colorScheme.onSurface,
-                                )
-                            }
-                        }
-
-                        Spacer(Modifier.height(16.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
+                        ConnectionState.CONNECTED ->
                             Text(
-                                "Monthly Quota Remaining",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            val quotaText =
-                                when {
-                                    remaining != null && max != null ->
-                                        "${formatBytes(remaining)} / ${formatBytes(max)}"
-                                    remaining != null -> formatBytes(remaining)
-                                    isUnlimited -> "Unlimited"
-                                    max != null -> "Limited to ${formatBytes(max)}"
-                                    else -> "\u2014"
-                                }
-                            Text(
-                                quotaText,
-                                modifier = Modifier.weight(1f),
-                                textAlign = TextAlign.End,
+                                text = formatDuration(elapsedSeconds),
                                 style =
-                                    MaterialTheme.typography.labelSmall.copy(
-                                        fontWeight = FontWeight.SemiBold
+                                    MaterialTheme.typography.titleMedium.copy(
+                                        fontFeatureSettings = "tnum",
+                                        fontWeight = FontWeight.Bold,
                                     ),
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
-                        }
+                        ConnectionState.DISCONNECTED ->
+                            Text(
+                                stringResource(R.string.home_tap_to_connect),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                    }
 
-                        Spacer(Modifier.height(8.dp))
-
-                        val quotaFraction =
-                            when {
-                                max != null && max > 0L && remaining != null ->
-                                    (remaining.toFloat() / max.toFloat()).coerceIn(0f, 1f)
-                                isUnlimited -> 1f
-                                remaining != null && remaining > 0L -> 1f
-                                else -> 0f
-                            }
-
-                        LinearProgressIndicator(
-                            progress = { quotaFraction },
-                            modifier =
-                                Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
-                            color =
-                                if (isConnected) statusColors.connected
-                                else MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    val error = lastError
+                    AnimatedVisibility(
+                        visible = error != null && state != ConnectionState.CONNECTING,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically(),
+                    ) {
+                        Text(
+                            text = error.orEmpty(),
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp, start = 16.dp, end = 16.dp),
                         )
                     }
-                }
 
-                Spacer(Modifier.height(dynamicSpace))
+                    Spacer(Modifier.height(20.dp))
+
+                    // Location
+                    StaggeredEntrance(index = 0) {
+                        Card(
+                            onClick = onOpenServers,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = foxyCardColors(),
+                        ) {
+                            Row(
+                                Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(
+                                    modifier =
+                                        Modifier.size(44.dp)
+                                            .clip(CircleShape)
+                                            .background(FoxOrange.copy(alpha = 0.14f)),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    val flag = displayProxy?.emojiFlag
+                                    if (!flag.isNullOrBlank()) {
+                                        Text(flag, style = MaterialTheme.typography.titleLarge)
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Filled.Public,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.width(14.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        stringResource(R.string.home_location),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    val displayName =
+                                        displayProxy?.displayName?.ifBlank { displayProxy.countryCode }
+                                            ?: stringResource(R.string.home_recommended)
+                                    AnimatedContent(
+                                        targetState = displayName,
+                                        transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(150)) },
+                                        label = "location-name",
+                                    ) { name ->
+                                        Text(
+                                            name,
+                                            style = MaterialTheme.typography.titleMedium,
+                                        )
+                                    }
+                                    if (
+                                        state != ConnectionState.DISCONNECTED &&
+                                            activeProxy != null &&
+                                            selectedProxy != null &&
+                                            activeProxy != selectedProxy
+                                    ) {
+                                        val nextDisplayName =
+                                            selectedProxy
+                                                ?.displayName
+                                                ?.ifBlank { selectedProxy?.countryCode.orEmpty() }
+                                                .orEmpty()
+                                        Text(
+                                            stringResource(R.string.home_next_connection, nextDisplayName),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                                Icon(
+                                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    // IP + protection badge
+                    StaggeredEntrance(index = 1) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = foxyCardColors(),
+                        ) {
+                            val isConnected = state == ConnectionState.CONNECTED
+                            val ipDisplay =
+                                if (isConnected) {
+                                    vpnEdgeIp?.let {
+                                        if (it.countryCode.isNotEmpty()) "${it.ip} • ${it.countryCode}" else it.ip
+                                    } ?: "—"
+                                } else {
+                                    realIp?.let {
+                                        if (it.countryCode.isNotEmpty()) "${it.ip} • ${it.countryCode}" else it.ip
+                                    } ?: "—"
+                                }
+                            val badgeColor by
+                                animateColorAsState(
+                                    targetValue =
+                                        if (isConnected) statusColors.connected else MaterialTheme.colorScheme.error,
+                                    label = "badge-color",
+                                )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(
+                                    modifier =
+                                        Modifier.size(44.dp).clip(CircleShape).background(badgeColor.copy(alpha = 0.14f)),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    AnimatedContent(
+                                        targetState = isConnected,
+                                        transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(150)) },
+                                        label = "shield-icon",
+                                    ) { isProtected ->
+                                        Icon(
+                                            if (isProtected) Icons.Filled.VerifiedUser else Icons.Filled.GppMaybe,
+                                            contentDescription = null,
+                                            tint = badgeColor,
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.width(14.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        stringResource(R.string.home_current_ip),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Spacer(Modifier.height(2.dp))
+                                    AnimatedContent(
+                                        targetState = ipDisplay,
+                                        transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(150)) },
+                                        label = "ip-text",
+                                    ) { ip ->
+                                        Text(
+                                            ip,
+                                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.width(8.dp))
+                                Box(
+                                    modifier =
+                                        Modifier.clip(RoundedCornerShape(50))
+                                            .background(badgeColor.copy(alpha = 0.15f))
+                                            .padding(horizontal = 12.dp, vertical = 5.dp)
+                                ) {
+                                    Text(
+                                        when {
+                                            isConnected && proxyOnlyActive -> stringResource(R.string.home_badge_proxy_active)
+                                            isConnected -> stringResource(R.string.home_badge_protected)
+                                            else -> stringResource(R.string.home_badge_exposed)
+                                        },
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = badgeColor,
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    // Traffic, latency & quota
+                    StaggeredEntrance(index = 2) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = foxyCardColors(),
+                        ) {
+                            Column(Modifier.padding(16.dp)) {
+                                val isConnected = state == ConnectionState.CONNECTED
+                                val remaining = quotaRemaining
+                                val max = quotaMax
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    StatTile(
+                                        icon = Icons.Filled.DataUsage,
+                                        label = stringResource(R.string.home_data_used),
+                                        value = formatBytes(if (isConnected) liveStats.sessionBytes else 0L),
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    val currentPing = if (isConnected) pingLatency else null
+                                    StatTile(
+                                        icon = Icons.Filled.Speed,
+                                        label = stringResource(R.string.home_latency),
+                                        value =
+                                            when {
+                                                isPinging -> stringResource(R.string.home_pinging)
+                                                currentPing != null -> stringResource(R.string.unit_ms, currentPing)
+                                                else -> stringResource(R.string.home_ping_none)
+                                            },
+                                        valueColor =
+                                            if (currentPing != null) statusColors.connected
+                                            else MaterialTheme.colorScheme.onSurface,
+                                        modifier =
+                                            Modifier.weight(1f)
+                                                .heightIn(min = 48.dp)
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable(enabled = isConnected && !isPinging, role = Role.Button) {
+                                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    homeModel.triggerPing()
+                                                },
+                                    )
+                                }
+
+                                Spacer(Modifier.height(16.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        stringResource(R.string.home_quota_remaining),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    val quotaText =
+                                        when {
+                                            remaining != null && max != null ->
+                                                "${formatBytes(remaining)} / ${formatBytes(max)}"
+                                            remaining != null -> formatBytes(remaining)
+                                            isUnlimited -> stringResource(R.string.home_quota_unlimited)
+                                            max != null -> stringResource(R.string.home_quota_limited_to, formatBytes(max))
+                                            else -> "—"
+                                        }
+                                    Text(
+                                        quotaText,
+                                        modifier = Modifier.weight(1f),
+                                        textAlign = TextAlign.End,
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                }
+
+                                Spacer(Modifier.height(10.dp))
+
+                                val quotaFraction =
+                                    when {
+                                        max != null && max > 0L && remaining != null ->
+                                            (remaining.toFloat() / max.toFloat()).coerceIn(0f, 1f)
+                                        isUnlimited -> 1f
+                                        remaining != null && remaining > 0L -> 1f
+                                        else -> 0f
+                                    }
+                                val animatedFraction by
+                                    animateFloatAsState(
+                                        targetValue = quotaFraction,
+                                        animationSpec = tween(900, easing = FastOutSlowInEasing),
+                                        label = "quota-fraction",
+                                    )
+
+                                LinearProgressIndicator(
+                                    progress = { animatedFraction },
+                                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+                                    color = if (isConnected) statusColors.connected else MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(dynamicSpace))
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun foxyCardColors() =
+    CardDefaults.cardColors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.9f)
+    )
+
+@Composable
+private fun StatTile(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    valueColor: Color = MaterialTheme.colorScheme.onSurface,
+) {
+    Row(modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(10.dp))
+        Column {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(2.dp))
+            AnimatedContent(
+                targetState = value,
+                transitionSpec = {
+                    (fadeIn(tween(200)) + slideInVertically { it / 3 }) togetherWith fadeOut(tween(120))
+                },
+                label = "stat-value",
+            ) { v ->
+                Text(
+                    v,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = valueColor,
+                )
             }
         }
     }

@@ -90,7 +90,7 @@ class FoxyVpnApp : Application(), AppContainer {
         val vpnChannel =
             NotificationChannel(
                 VPN_NOTIFICATION_CHANNEL_ID,
-                "VPN status",
+                getString(R.string.notif_channel_vpn),
                 NotificationManager.IMPORTANCE_LOW,
             )
         val updateChannel =

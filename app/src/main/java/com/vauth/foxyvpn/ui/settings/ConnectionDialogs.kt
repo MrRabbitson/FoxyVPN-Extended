@@ -1,6 +1,8 @@
 package com.vauth.foxyvpn.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import com.vauth.foxyvpn.ui.localizedDescription
+import com.vauth.foxyvpn.ui.localizedLabel
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -86,7 +88,7 @@ internal fun DnsProviderPickerDialog(
                     ) {
                         RadioButton(selected = selectedProvider == provider, onClick = null)
                         Column(Modifier.padding(start = 8.dp)) {
-                            Text(provider.label)
+                            Text(provider.localizedLabel())
                             val detail =
                                 when (provider) {
                                     SettingsStore.DnsProvider.DIRECT_SYSTEM ->
@@ -217,7 +219,7 @@ internal fun HttpVersionPickerDialog(
                         Column(Modifier.padding(start = 8.dp)) {
                             Text(version.label)
                             Text(
-                                version.description,
+                                version.localizedDescription(),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -380,9 +382,9 @@ internal fun TlsFragmentPickerDialog(
                     ) {
                         RadioButton(selected = selectedMode == mode, onClick = null)
                         Column(Modifier.padding(start = 8.dp)) {
-                            Text(mode.label)
+                            Text(mode.localizedLabel())
                             Text(
-                                mode.description,
+                                mode.localizedDescription(),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -461,7 +463,7 @@ internal fun UtlsFingerprintPickerDialog(
                                 .padding(vertical = 4.dp),
                     ) {
                         RadioButton(selected = selected == fp, onClick = null)
-                        Text(fp.label, modifier = Modifier.padding(start = 8.dp))
+                        Text(fp.localizedLabel(), modifier = Modifier.padding(start = 8.dp))
                     }
                 }
             }

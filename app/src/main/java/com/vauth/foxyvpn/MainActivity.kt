@@ -1,6 +1,7 @@
 package com.vauth.foxyvpn
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.net.VpnService
 import android.os.Build
@@ -21,6 +22,10 @@ import com.vauth.foxyvpn.ui.theme.rememberThemeController
 import com.vauth.foxyvpn.vpn.FoxyVpnService
 
 class MainActivity : ComponentActivity() {
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(com.vauth.foxyvpn.ui.settings.AppLanguage.wrap(newBase))
+    }
 
     private val vpnPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->

@@ -219,4 +219,66 @@
     <string name="settings_relayer_ep_server_list">Server List</string>
     <string name="settings_relayer_ep_server_list_desc">Mozilla Remote Settings catalog</string>
     <string name="settings_relayer_test_latency">Test latency</string>
+    <!-- Home screen -->
+    <string name="home_connect">Connect</string>
+    <string name="home_disconnect">Disconnect</string>
+    <string name="home_tap_to_cancel">Tap to cancel</string>
+    <string name="home_retrying_tap_to_cancel">Retrying connection\u2026 Tap to cancel</string>
+    <string name="home_tap_to_connect">Tap the fox to connect</string>
+    <string name="home_location">Location</string>
+    <string name="home_current_ip">Current IP</string>
+    <string name="home_badge_proxy_active">Proxy active</string>
+    <string name="home_badge_protected">Protected</string>
+    <string name="home_badge_exposed">Exposed</string>
+    <string name="home_data_used">Data used</string>
+    <string name="home_quota_remaining">Monthly quota remaining</string>
+    <string name="home_quota_unlimited">Unlimited</string>
+    <string name="home_quota_limited_to">Limited to %1$s</string>
+    <string name="home_ping_none">\u2014 ms</string>
+    <string name="home_mascot_resting">The fox is resting</string>
+    <string name="home_mascot_searching">The fox is sniffing out a route\u2026</string>
+    <string name="home_mascot_guarding">The fox is guarding your traffic</string>
+    <string name="unit_ms">%1$d ms</string>
+    <string name="splash_tagline">Fast. Private. Foxy.</string>
+
+    <!-- Settings enum labels -->
+    <string name="settings_vpn_unavailable">VPN settings are unavailable on this device</string>
+    <string name="dns_system">System DNS</string>
+    <string name="dns_custom_doh">Custom DoH</string>
+    <string name="http_version_1_desc">Classic HTTP proxy over TLS</string>
+    <string name="http_version_2_desc">Multiplexed streams over TCP</string>
+    <string name="http_version_3_desc">QUIC transport over UDP</string>
+    <string name="tls_fragment_off">Disabled</string>
+    <string name="tls_fragment_off_desc">Standard TLS</string>
+    <string name="tls_fragment_record">Record</string>
+    <string name="tls_fragment_record_desc">TLS record layer</string>
+    <string name="tls_fragment_packet">Packet</string>
+    <string name="tls_fragment_packet_desc">TCP segment layer</string>
+    <string name="tls_fragment_combined">Combined</string>
+    <string name="tls_fragment_combined_desc">Record and packet</string>
+    <string name="utls_randomized">Randomized</string>
+
+    <!-- Language -->
+    <string name="settings_section_appearance">Appearance</string>
+    <string name="settings_language">Language</string>
+    <string name="language_system">System default</string>
+    <string name="language_english" translatable="false">English</string>
+    <string name="language_russian" translatable="false">Русский</string>
+
+    <!-- VPN service notifications -->
+    <string name="notif_channel_vpn">VPN status</string>
+    <string name="notif_connecting">Connecting\u2026</string>
+    <string name="notif_disconnecting">Disconnecting\u2026</string>
+    <string name="notif_reconnecting">Reconnecting\u2026</string>
+    <string name="notif_connected">Connected \u2022 %1$s</string>
+    <string name="notif_proxy_active">Proxy active \u2022 %1$s</string>
+    <string name="notif_action_disconnect">Disconnect</string>
+    <string name="error_credentials_renew">Proxy credentials could not be renewed in time. Reconnect to retry.</string>
+    <string name="error_credentials_expired">Proxy credentials expired. Reconnect to retry.</string>
+
+    <!-- Errors -->
+    <string name="login_error_browser">Browser sign-in failed. Please try again.</string>
+    <string name="login_error_timeout">Sign-in timed out. Try again.</string>
+    <string name="login_error_failed">Sign-in failed. Try again.</string>
+    <string name="session_clear_failed">Could not clear the session</string>
 </resources>

@@ -187,6 +187,7 @@ fun ServerListScreen(
                                                 Icon(
                                                     Icons.Filled.CheckCircle,
                                                     contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
                                                 )
                                             }
                                         },
@@ -293,6 +294,7 @@ fun ServerListScreen(
                                                 Icon(
                                                     Icons.Filled.CheckCircle,
                                                     contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
                                                 )
                                             }
                                         },

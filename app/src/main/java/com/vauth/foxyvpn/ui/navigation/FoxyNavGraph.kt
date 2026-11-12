@@ -1,6 +1,13 @@
 package com.vauth.foxyvpn.ui.navigation
 
 import android.net.ConnectivityManager
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,7 +55,28 @@ fun FoxyNavGraph(
     val context = LocalContext.current
     val sessionScope = rememberCoroutineScope()
     var signingOut by remember { mutableStateOf(false) }
-    NavHost(navController = navController, startDestination = FoxyRoutes.SPLASH) {
+    NavHost(
+        navController = navController,
+        startDestination = FoxyRoutes.SPLASH,
+        enterTransition = {
+            fadeIn(tween(320)) +
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Start,
+                    tween(380, easing = FastOutSlowInEasing),
+                    initialOffset = { it / 4 },
+                )
+        },
+        exitTransition = { fadeOut(tween(220)) + scaleOut(tween(300), targetScale = 0.94f) },
+        popEnterTransition = { fadeIn(tween(320)) + scaleIn(tween(320), initialScale = 0.94f) },
+        popExitTransition = {
+            fadeOut(tween(220)) +
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.End,
+                    tween(320, easing = FastOutSlowInEasing),
+                    targetOffset = { it / 4 },
+                )
+        },
+    ) {
         composable(FoxyRoutes.SPLASH) {
             SplashScreen(
                 authRepository = container.authRepository,
@@ -159,7 +187,7 @@ fun FoxyNavGraph(
                         } catch (error: Exception) {
                             android.widget.Toast.makeText(
                                 context,
-                                error.message ?: "Could not clear the session",
+                                error.message ?: context.getString(com.vauth.foxyvpn.R.string.session_clear_failed),
                                 android.widget.Toast.LENGTH_LONG,
                             ).show()
                         } finally {

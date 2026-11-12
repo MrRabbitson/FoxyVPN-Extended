@@ -348,7 +348,7 @@ class FoxyVpnService : VpnService() {
             stopping = false
             _state.value = ConnectionState.CONNECTING
             _lastError.value = null
-            statusLabel = "Connecting\u2026"
+            statusLabel = getString(com.vauth.foxyvpn.R.string.notif_connecting)
             enterForeground(statusLabel)
 
             acquireWakeLocks()
@@ -379,7 +379,7 @@ class FoxyVpnService : VpnService() {
         retryJob?.cancel()
         tokenRenewalJob?.cancel()
         AppLogger.i(TAG, "disconnect: $reason")
-        statusLabel = "Disconnecting…"
+        statusLabel = getString(com.vauth.foxyvpn.R.string.notif_disconnecting)
         stopMonitoring()
         releaseWakeLocks()
         val server = commandServer
@@ -459,7 +459,7 @@ class FoxyVpnService : VpnService() {
                     val remaining = deadline - SystemClock.elapsedRealtime()
                     if (remaining <= 0L) {
                         _lastError.value =
-                            "Proxy credentials could not be renewed in time. Reconnect to retry."
+                            getString(com.vauth.foxyvpn.R.string.error_credentials_renew)
                         requestDisconnect("proxy pass renewal deadline reached")
                         return@launch
                     }
@@ -534,7 +534,7 @@ class FoxyVpnService : VpnService() {
                             return@launch
 
                         if (SystemClock.elapsedRealtime() >= installedCredentialDeadline.get()) {
-                            _lastError.value = "Proxy credentials expired. Reconnect to retry."
+                            _lastError.value = getString(com.vauth.foxyvpn.R.string.error_credentials_expired)
                             requestDisconnect("installed credential deadline reached")
                             return@launch
                         }
@@ -632,17 +632,17 @@ class FoxyVpnService : VpnService() {
 
                 fun connectedLabel(): String =
                     if (proxyOnlyMode) {
-                        "Proxy active \u2022 $socksBindAddress:$socksPort"
+                        getString(com.vauth.foxyvpn.R.string.notif_proxy_active, "$socksBindAddress:$socksPort")
                     } else {
                         val name =
                             if (primaryCandidate.countryCode.equals(RECOMMENDED_COUNTRY_CODE, ignoreCase = true) ||
                                 primaryCandidate.countryName.equals("Recomended", ignoreCase = true)
                             ) {
-                                "Recommended"
+                                getString(com.vauth.foxyvpn.R.string.home_recommended)
                             } else {
                                 primaryCandidate.countryName.ifBlank { primaryCandidate.countryCode }
                             }
-                        "Connected \u2022 $name"
+                        getString(com.vauth.foxyvpn.R.string.notif_connected, name)
                     }
 
                 if (proxyOnlyMode) {
@@ -882,7 +882,7 @@ class FoxyVpnService : VpnService() {
                         "transient connect failure; retrying in ${retryDelay / 1_000L}s",
                     )
                     _state.value = ConnectionState.CONNECTING
-                    statusLabel = "Reconnecting\u2026"
+                    statusLabel = getString(com.vauth.foxyvpn.R.string.notif_reconnecting)
                     updateNotification(statusLabel)
                     connectJob = null
                     scheduleReconnect(retryDelay)
@@ -1182,7 +1182,7 @@ class FoxyVpnService : VpnService() {
                                         }
                                         releaseResources(detachResources())
                                         connectionCandidate = alternate ?: candidate
-                                        statusLabel = "Reconnecting…"
+                                        statusLabel = getString(com.vauth.foxyvpn.R.string.notif_reconnecting)
                                         updateNotification(statusLabel)
                                         healthRecoveryInProgress = true
                                         connect()
@@ -1231,7 +1231,7 @@ class FoxyVpnService : VpnService() {
             )
         val builder =
             NotificationCompat.Builder(this, FoxyVpnApp.VPN_NOTIFICATION_CHANNEL_ID)
-                .setContentTitle("FoxyVPN")
+                .setContentTitle(getString(com.vauth.foxyvpn.R.string.app_name))
                 .setContentText(text)
                 .setSmallIcon(android.R.drawable.ic_lock_lock)
                 .setContentIntent(openIntent)
@@ -1239,7 +1239,7 @@ class FoxyVpnService : VpnService() {
                 .setOnlyAlertOnce(true)
                 .addAction(
                     android.R.drawable.ic_menu_close_clear_cancel,
-                    "Disconnect",
+                    getString(com.vauth.foxyvpn.R.string.notif_action_disconnect),
                     disconnectIntent,
                 )
                 .setCategory(NotificationCompat.CATEGORY_SERVICE)

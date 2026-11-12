@@ -1,6 +1,7 @@
 package com.vauth.foxyvpn.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -23,19 +24,21 @@ import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
@@ -47,6 +50,12 @@ import com.vauth.foxyvpn.R
 import com.vauth.foxyvpn.data.FxaAuthRepository
 import com.vauth.foxyvpn.data.ThemeMode
 import com.vauth.foxyvpn.ui.LoginViewModel
+import com.vauth.foxyvpn.ui.components.FlameBackdrop
+import com.vauth.foxyvpn.ui.components.FlameButton
+import com.vauth.foxyvpn.ui.components.FoxMascot
+import com.vauth.foxyvpn.ui.components.FoxMood
+import com.vauth.foxyvpn.ui.components.GradientText
+import com.vauth.foxyvpn.ui.components.StaggeredEntrance
 import com.vauth.foxyvpn.ui.theme.ThemeController
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -57,9 +66,10 @@ fun LoginScreen(
     onSignedIn: () -> Unit,
     onOpenSettings: () -> Unit = {},
 ) {
+    val appContext = LocalContext.current.applicationContext
     val model: LoginViewModel =
         androidx.lifecycle.viewmodel.compose.viewModel(
-            factory = remember(authRepository) { LoginViewModel.factory(authRepository) }
+            factory = remember(authRepository) { LoginViewModel.factory(authRepository) { appContext.getString(it) } }
         )
     val uiState by model.uiState.collectAsStateWithLifecycle()
     val browserStartUrl = uiState.browserStartUrl
@@ -81,10 +91,14 @@ fun LoginScreen(
         return
     }
 
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    FlameBackdrop(Modifier.fillMaxSize(), intensity = 0.7f)
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.app_name)) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                title = {},
                 actions = {
                     if (themeController != null) {
                         val mode = themeController.mode
@@ -153,35 +167,47 @@ fun LoginScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(24.dp),
                 verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text(
-                    stringResource(R.string.login_title),
-                    style = MaterialTheme.typography.headlineMedium,
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    stringResource(R.string.login_desc),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                StaggeredEntrance(index = 0) {
+                    FoxMascot(mood = FoxMood.GUARDING, modifier = Modifier.size(132.dp))
+                }
+                Spacer(Modifier.height(16.dp))
+                StaggeredEntrance(index = 1) {
+                    GradientText(
+                        stringResource(R.string.login_title),
+                        style = MaterialTheme.typography.headlineMedium.copy(textAlign = TextAlign.Center),
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                StaggeredEntrance(index = 2) {
+                    Text(
+                        stringResource(R.string.login_desc),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                }
                 storageError?.let {
                     Spacer(Modifier.height(12.dp))
                     Text(it, color = MaterialTheme.colorScheme.error)
                 }
                 Spacer(Modifier.height(24.dp))
 
-                Button(
-                    onClick = model::startBrowserLogin,
-                    enabled = !completingBrowserLogin,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(R.string.login_btn_sign_in))
+                StaggeredEntrance(index = 3) {
+                    FlameButton(
+                        text = stringResource(R.string.login_btn_sign_in),
+                        onClick = model::startBrowserLogin,
+                        enabled = !completingBrowserLogin,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
                 Text(
                     stringResource(R.string.login_help),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 6.dp),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 10.dp),
                 )
 
                 errorMessage?.let {
@@ -196,4 +222,5 @@ fun LoginScreen(
             }
         }
     }
+}
 }
