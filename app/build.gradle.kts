@@ -37,6 +37,14 @@ android {
     }
 
     signingConfigs {
+        // Fixed key for test builds, so every CI build installs over the previous one.
+        getByName("debug") {
+            storeFile = file("debug-signing.p12")
+            storeType = "pkcs12"
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         if (hasReleaseSigning) {
             create("release") {
                 storeFile = releaseKeystoreFile
