@@ -3,6 +3,7 @@ package com.vauth.foxyvpn.ui.components
 import android.graphics.PixelFormat
 import android.media.ImageReader
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
 import android.graphics.Bitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -198,30 +199,35 @@ internal constructor(
     private var frame by mutableIntStateOf(0)
     private var takenAt = 0L
     private var busy = false
-    /** How long the last picture took from request to arrival. */
-    private var roundTrip = 8L
+    private var released = false
+    /** When the picture now on show was requested. */
+    private var shownRequestedAt = 0L
+    private var loggedAt = 0L
     private var pendingArea = Size.Zero
     private var reader: ImageReader? = null
-    private val handler = Handler(Looper.getMainLooper())
+    private val main = Handler(Looper.getMainLooper())
     private val drawScope = CanvasDrawScope()
-    private var output: Bitmap? = null
+    // Two bitmaps: the reader thread fills the one that is not on screen.
+    private val buffers = arrayOfNulls<Bitmap>(2)
+    private val images = arrayOfNulls<ImageBitmap>(2)
+    private var showing = 0
     private var pixels = IntArray(0)
     private var scratch = IntArray(0)
 
     /** Subscribes the caller to new pictures of this source. */
     internal fun observe(): Int = frame
 
-    /** Number of pictures taken so far; does not subscribe. */
-    internal fun pictureCount(): Int = Snapshot.withoutReadObservation { frame }
+    /** Whether the picture on show was requested at or after [uptimeMillis]. */
+    internal fun isFreshSince(uptimeMillis: Long): Boolean = shownRequestedAt >= uptimeMillis
 
     /** Called right after [layer] was recorded. */
     internal fun snap(scope: DrawScope) {
         val now = SystemClock.uptimeMillis()
         // A picture that never arrived must not block the next one for ever.
         if (busy && now - takenAt > 1_000L) busy = false
-        // One picture in flight at a time, and no more than a third of the time
-        // spent on them, however slow this device is at producing one.
-        if (busy || captureBroken || capturePaused || now - takenAt < max(16L, roundTrip * 3)) return
+        // One picture in flight at a time; the next is requested by the first
+        // frame after it lands, so the rate is whatever the device can return.
+        if (busy || captureBroken || capturePaused || released) return
         val full = scope.size
         if (full.width < 1f || full.height < 1f) return
         val scale = CAPTURE_WIDTH / full.width
@@ -232,7 +238,7 @@ internal constructor(
             if (target == null || target.width != w || target.height != h) {
                 target?.close()
                 target = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2)
-                target.setOnImageAvailableListener({ onPicture(it) }, handler)
+                target.setOnImageAvailableListener({ onPicture(it) }, ReadbackThread.handler)
                 reader = target
             }
             val behind = backdrop
@@ -263,12 +269,14 @@ internal constructor(
         }
     }
 
+    /** Runs on the read-back thread, so the pixel work never costs the UI a frame. */
     private fun onPicture(source: ImageReader) {
         try {
             val image = source.acquireLatestImage() ?: return
+            val slot = 1 - showing
+            val w = image.width
+            val h = image.height
             try {
-                val w = image.width
-                val h = image.height
                 val plane = image.planes[0]
                 val bytes = plane.buffer
                 val rowStride = plane.rowStride
@@ -288,32 +296,55 @@ internal constructor(
                         at += pixelStride
                     }
                 }
-                boxBlur(pixels, scratch, w, h, radius = 2)
-                boxBlur(pixels, scratch, w, h, radius = 2)
-                var out = output
-                if (out == null || out.width != w || out.height != h) {
-                    out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                    output = out
-                    blurred = out.asImageBitmap()
-                }
-                out.setPixels(pixels, 0, w, 0, 0, w, h)
-                area = pendingArea
-                roundTrip = (SystemClock.uptimeMillis() - takenAt).coerceIn(1L, 200L)
-                frame++
             } finally {
                 image.close()
             }
+            boxBlur(pixels, scratch, w, h, radius = 2)
+            boxBlur(pixels, scratch, w, h, radius = 2)
+            var out = buffers[slot]
+            if (out == null || out.width != w || out.height != h) {
+                out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                buffers[slot] = out
+                images[slot] = out.asImageBitmap()
+            }
+            out.setPixels(pixels, 0, w, 0, 0, w, h)
+            main.post {
+                showing = slot
+                blurred = images[slot]
+                area = pendingArea
+                shownRequestedAt = takenAt
+                val now = SystemClock.uptimeMillis()
+                if (now - loggedAt > 15_000L) {
+                    loggedAt = now
+                    AppLogger.i("Glass", "picture round trip ${now - takenAt} ms")
+                }
+                busy = false
+                frame++
+            }
         } catch (error: Exception) {
-            captureBroken = true
-            AppLogger.w("Glass", "reading the picture back failed; glass shows the backdrop only", error)
-        } finally {
-            busy = false
+            main.post {
+                if (!released) {
+                    captureBroken = true
+                    AppLogger.w("Glass", "reading the picture back failed; glass shows the backdrop only", error)
+                }
+                busy = false
+            }
         }
     }
 
     internal fun release() {
+        released = true
         reader?.close()
         reader = null
+    }
+}
+
+/** One background thread shared by every source for reading pictures back. */
+private object ReadbackThread {
+    val handler: Handler by lazy {
+        val thread = HandlerThread("glass-readback")
+        thread.start()
+        Handler(thread.looper)
     }
 }
 

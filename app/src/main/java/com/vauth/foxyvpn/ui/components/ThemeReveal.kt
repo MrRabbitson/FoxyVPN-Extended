@@ -5,6 +5,7 @@ import android.app.Activity
 import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.PixelCopy
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.graphics.FilterQuality
@@ -98,8 +99,11 @@ fun ThemeRevealOverlay(reveal: ThemeReveal) {
             GlassClock.keepLive(600L)
             repeat(2) { withFrameNanos {} }
             if (screen != null) {
-                val seen = screen.pictureCount()
-                withTimeoutOrNull(260L) { while (screen.pictureCount() < seen + 2) withFrameNanos {} }
+                // A picture asked for from now on is guaranteed to be of the new theme.
+                val themed = SystemClock.uptimeMillis()
+                withTimeoutOrNull(500L) { while (!screen.isFreshSince(themed)) withFrameNanos {} }
+                // One more frame so the bars have drawn it.
+                withFrameNanos {}
             }
             // Nothing but the circle runs from here on.
             setGlassPaused(true)
