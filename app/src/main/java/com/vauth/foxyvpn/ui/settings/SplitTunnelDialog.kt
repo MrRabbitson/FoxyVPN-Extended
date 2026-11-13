@@ -1,5 +1,8 @@
 package com.vauth.foxyvpn.ui.settings
 
+import com.vauth.foxyvpn.ui.components.GlassCheckbox
+import com.vauth.foxyvpn.ui.components.GlassRadioButton
+import com.vauth.foxyvpn.ui.components.GlassSwitch
 import com.vauth.foxyvpn.ui.components.GlassTextButton
 import com.vauth.foxyvpn.ui.components.GlassAlertDialog
 import androidx.compose.ui.res.painterResource
@@ -15,13 +18,10 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -117,7 +117,7 @@ internal fun SplitTunnelDialog(
                                         )
                                         .heightIn(min = 48.dp),
                             ) {
-                                RadioButton(selected = mode == option, onClick = null)
+                                GlassRadioButton(selected = mode == option, onClick = null)
                                 Text(
                                     stringResource(
                                         if (option == SettingsStore.SplitTunnelMode.INCLUDE)
@@ -176,7 +176,7 @@ internal fun SplitTunnelDialog(
                             stringResource(R.string.settings_show_system_apps),
                             modifier = Modifier.weight(1f).padding(end = 8.dp),
                         )
-                        Switch(checked = showSystemApps, onCheckedChange = null)
+                        GlassSwitch(checked = showSystemApps, onCheckedChange = null)
                     }
                     OutlinedTextField(
                         value = searchQuery,
@@ -220,7 +220,7 @@ internal fun SplitTunnelDialog(
                                     .heightIn(min = 48.dp)
                                     .padding(vertical = 2.dp),
                         ) {
-                            Checkbox(checked = app.packageName in selected, onCheckedChange = null)
+                            GlassCheckbox(checked = app.packageName in selected, onCheckedChange = null)
                             Column(Modifier.weight(1f).padding(start = 8.dp)) {
                                 Text(app.label, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 Text(

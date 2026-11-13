@@ -1,5 +1,6 @@
 package com.vauth.foxyvpn.ui.settings
 
+import com.vauth.foxyvpn.ui.components.GlassRadioButton
 import com.vauth.foxyvpn.ui.components.GlassTextButton
 import com.vauth.foxyvpn.ui.components.GlassAlertDialog
 import androidx.compose.foundation.layout.Arrangement
@@ -19,7 +20,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -86,7 +86,7 @@ internal fun DnsProviderPickerDialog(
                                 .heightIn(min = 48.dp)
                                 .padding(vertical = 4.dp),
                     ) {
-                        RadioButton(selected = selectedProvider == provider, onClick = null)
+                        GlassRadioButton(selected = selectedProvider == provider, onClick = null)
                         Column(Modifier.padding(start = 8.dp)) {
                             Text(provider.localizedLabel())
                             val detail =
@@ -215,7 +215,7 @@ internal fun HttpVersionPickerDialog(
                                 .heightIn(min = 48.dp)
                                 .padding(vertical = 4.dp),
                     ) {
-                        RadioButton(selected = selected == version, onClick = null)
+                        GlassRadioButton(selected = selected == version, onClick = null)
                         Column(Modifier.padding(start = 8.dp)) {
                             Text(version.label)
                             Text(
@@ -276,7 +276,7 @@ internal fun IpModePickerDialog(
                                 .heightIn(min = 48.dp)
                                 .padding(vertical = 4.dp),
                     ) {
-                        RadioButton(selected = selected == mode, onClick = null)
+                        GlassRadioButton(selected = selected == mode, onClick = null)
                         Text(
                             text = label,
                             modifier = Modifier.padding(start = 8.dp),
@@ -380,7 +380,7 @@ internal fun TlsFragmentPickerDialog(
                                 .heightIn(min = 48.dp)
                                 .padding(vertical = 4.dp),
                     ) {
-                        RadioButton(selected = selectedMode == mode, onClick = null)
+                        GlassRadioButton(selected = selectedMode == mode, onClick = null)
                         Column(Modifier.padding(start = 8.dp)) {
                             Text(mode.localizedLabel())
                             Text(
@@ -462,7 +462,7 @@ internal fun UtlsFingerprintPickerDialog(
                                 .heightIn(min = 48.dp)
                                 .padding(vertical = 4.dp),
                     ) {
-                        RadioButton(selected = selected == fp, onClick = null)
+                        GlassRadioButton(selected = selected == fp, onClick = null)
                         Text(fp.localizedLabel(), modifier = Modifier.padding(start = 8.dp))
                     }
                 }
@@ -510,7 +510,7 @@ internal fun ConcurrencyPickerDialog(
                                 .heightIn(min = 48.dp)
                                 .padding(vertical = 4.dp),
                     ) {
-                        RadioButton(selected = selected == count, onClick = null)
+                        GlassRadioButton(selected = selected == count, onClick = null)
                         val desc = pluralStringResource(R.plurals.stream_count, count, count)
                         Text(desc, modifier = Modifier.padding(start = 8.dp))
                     }

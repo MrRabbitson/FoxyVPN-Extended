@@ -1,5 +1,7 @@
 package com.vauth.foxyvpn.ui.settings
 
+import com.vauth.foxyvpn.ui.components.GlassCheckbox
+import com.vauth.foxyvpn.ui.components.GlassRadioButton
 import com.vauth.foxyvpn.ui.components.GlassTextButton
 import com.vauth.foxyvpn.ui.components.GlassAlertDialog
 import android.util.Base64
@@ -17,11 +19,9 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -198,7 +198,7 @@ internal fun RelayerProviderPickerDialog(
                             .heightIn(min = 48.dp)
                             .padding(vertical = 4.dp),
                     ) {
-                        RadioButton(
+                        GlassRadioButton(
                             selected = isSelected,
                             onClick = null,
                         )
@@ -402,7 +402,7 @@ internal fun RelayedEndpointsDialog(
                             .heightIn(min = 48.dp)
                             .padding(vertical = 4.dp),
                     ) {
-                        Checkbox(
+                        GlassCheckbox(
                             checked = isChecked,
                             onCheckedChange = null,
                         )

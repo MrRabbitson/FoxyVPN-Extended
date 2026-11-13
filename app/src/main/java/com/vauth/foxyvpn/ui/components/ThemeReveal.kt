@@ -96,10 +96,16 @@ fun ThemeRevealOverlay(reveal: ThemeReveal) {
             // Let the new theme compose and draw underneath before uncovering it,
             // so that work does not land in the middle of the animation. The
             // glass needs no special care: it follows the content frame by frame.
-            repeat(2) { withFrameNanos {} }
+            // The glass takes its picture of the new theme in these frames too;
+            // after that nothing but the circle runs.
+            GlassClock.keepLive(400L)
+            repeat(3) { withFrameNanos {} }
+            setGlassPaused(true)
             progress.animateTo(1f, tween(460, easing = EmphasizedEasing))
         } finally {
+            setGlassPaused(false)
             reveal.finish()
+            GlassClock.keepLive(300L)
         }
     }
     Canvas(Modifier.fillMaxSize()) {

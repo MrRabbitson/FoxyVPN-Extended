@@ -1,5 +1,7 @@
 package com.vauth.foxyvpn.ui.settings
 
+import com.vauth.foxyvpn.ui.components.GlassRadioButton
+import com.vauth.foxyvpn.ui.components.GlassSwitch
 import com.vauth.foxyvpn.ui.components.GlassTextButton
 import com.vauth.foxyvpn.ui.components.GlassAlertDialog
 import androidx.compose.foundation.layout.Arrangement
@@ -17,8 +19,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -137,7 +137,7 @@ private fun LocalProxyDialog(
                         .padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    RadioButton(
+                    GlassRadioButton(
                         selected = bindAddress == address,
                         onClick = null,
                         enabled = !busy,
@@ -241,7 +241,7 @@ private fun UpstreamProxyDialog(
                                 .heightIn(min = 48.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            RadioButton(selected = type == option, onClick = null, enabled = !busy)
+                            GlassRadioButton(selected = type == option, onClick = null, enabled = !busy)
                             Text(option.name, modifier = Modifier.padding(start = 12.dp))
                         }
                     }
@@ -404,6 +404,6 @@ internal fun ProxyToggle(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, modifier = Modifier.weight(1f).padding(end = 12.dp))
-        Switch(checked = checked, onCheckedChange = null, enabled = enabled)
+        GlassSwitch(checked = checked, onCheckedChange = null, enabled = enabled)
     }
 }

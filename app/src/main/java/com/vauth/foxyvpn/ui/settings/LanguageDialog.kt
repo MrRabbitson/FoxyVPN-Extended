@@ -1,5 +1,6 @@
 package com.vauth.foxyvpn.ui.settings
 
+import com.vauth.foxyvpn.ui.components.GlassRadioButton
 import com.vauth.foxyvpn.ui.components.GlassTextButton
 import com.vauth.foxyvpn.ui.components.GlassAlertDialog
 import android.app.Activity
@@ -15,7 +16,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -109,7 +109,7 @@ fun LanguagePickerDialog(
                                 .heightIn(min = 48.dp)
                                 .padding(vertical = 4.dp),
                     ) {
-                        RadioButton(selected = selected == tag, onClick = null)
+                        GlassRadioButton(selected = selected == tag, onClick = null)
                         Text(languageLabel(tag), modifier = Modifier.padding(start = 8.dp))
                     }
                 }

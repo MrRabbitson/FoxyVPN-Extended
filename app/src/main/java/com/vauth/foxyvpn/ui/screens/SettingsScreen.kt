@@ -1,9 +1,10 @@
 package com.vauth.foxyvpn.ui.screens
 
+import com.vauth.foxyvpn.ui.components.GlassRadioButton
+import com.vauth.foxyvpn.ui.components.GlassSwitch
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.material3.RadioButton
 import androidx.compose.ui.Alignment
 import com.vauth.foxyvpn.ui.components.GlassTextButton
 import com.vauth.foxyvpn.ui.components.GlassAlertDialog
@@ -31,7 +32,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -886,7 +886,7 @@ private fun SettingsToggle(
     ListItem(
         headlineContent = { Text(title) },
         supportingContent = { Text(summary) },
-        trailingContent = { Switch(checked = checked, onCheckedChange = null, enabled = enabled) },
+        trailingContent = { GlassSwitch(checked = checked, onCheckedChange = null, enabled = enabled) },
         modifier =
             Modifier.toggleable(
                     value = checked,
@@ -955,7 +955,7 @@ private fun PingMethodDialog(
                                 .heightIn(min = 48.dp)
                                 .padding(vertical = 4.dp),
                     ) {
-                        RadioButton(selected = selected == method, onClick = null)
+                        GlassRadioButton(selected = selected == method, onClick = null)
                         Column(Modifier.padding(start = 8.dp)) {
                             Text(method.label())
                             Text(
