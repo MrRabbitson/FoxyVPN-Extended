@@ -149,7 +149,7 @@ fun GlassSurface(
 ) {
     val dark = isDarkGlass()
     val backdrop = LocalGlassBackdrop.current
-    val blur = BlurSupported && backdrop != null
+    val behind = if (BlurSupported) backdrop else null
     // Without blur the pane must hide the detail behind it some other way.
     val solid = !BlurSupported && backdrop != null
 
@@ -164,7 +164,7 @@ fun GlassSurface(
 
     val blurRadius = with(LocalDensity.current) { 22.dp.toPx() }
     val pane = rememberGraphicsLayer()
-    if (blur) {
+    if (behind != null) {
         remember(pane, blurRadius) {
             pane.renderEffect = BlurEffect(blurRadius, blurRadius, TileMode.Clamp)
             true
@@ -225,15 +225,15 @@ fun GlassSurface(
                     // Half of the stroke is clipped away, leaving a 1dp inner rim.
                     val edgeStroke = Stroke(width = 2.dp.toPx())
                     onDrawWithContent {
-                        if (blur && backdrop != null) {
+                        if (behind != null) {
                             // Reading the frame counters redraws the pane whenever
                             // what is behind it was redrawn.
-                            backdrop.observe()
+                            behind.observe()
                             over?.observe()
                             val at = position
                             pane.record {
-                                translate(backdrop.origin.x - at.x, backdrop.origin.y - at.y) {
-                                    drawLayer(backdrop.layer)
+                                translate(behind.origin.x - at.x, behind.origin.y - at.y) {
+                                    drawLayer(behind.layer)
                                 }
                                 if (over != null) {
                                     translate(over.origin.x - at.x, over.origin.y - at.y) {
