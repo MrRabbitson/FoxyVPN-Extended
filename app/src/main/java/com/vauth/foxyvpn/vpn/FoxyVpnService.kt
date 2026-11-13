@@ -1043,10 +1043,24 @@ class FoxyVpnService : VpnService() {
         return pingMutex.withLock {
             fun current() = isCurrentSession(generation) && activeSocksPort == port
             if (!current()) return@withLock null
-            val url = (applicationContext as FoxyVpnApp).settingsStore.latencyProbeUrl
+            val store = (applicationContext as FoxyVpnApp).settingsStore
+            val url = store.latencyProbeUrl
             val credentials = activeProxyCredentials
             val latency =
-                PingUtil.measureProxyLatencyMs(port, url, credentials.first, credentials.second)
+                when (val method = store.pingMethod) {
+                    SettingsStore.PingMethod.PROXY_GET,
+                    SettingsStore.PingMethod.PROXY_HEAD ->
+                        PingUtil.measureProxyLatencyMs(
+                            port,
+                            url,
+                            credentials.first,
+                            credentials.second,
+                            headOnly = method == SettingsStore.PingMethod.PROXY_HEAD,
+                        )
+                    SettingsStore.PingMethod.TCP ->
+                        _activeCandidate.value?.let { PingUtil.measureTcpLatencyMs(it.host, it.port) }
+                    SettingsStore.PingMethod.UDP -> PingUtil.measureUdpLatencyMs()
+                }
             synchronized(credentialCommitLock) {
                 if (current()) {
                     _pingLatencyMs.value = latency

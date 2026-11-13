@@ -302,4 +302,13 @@
     <string name="tab_locations">Локации</string>
     <string name="home_protection">Защита</string>
     <string name="home_quota_of">%1$s из %2$s</string>
+    <string name="settings_ping_method">Способ пинга</string>
+    <string name="ping_proxy_get">Proxy GET</string>
+    <string name="ping_proxy_get_help">Полный HTTPS-запрос через туннель. Показывает задержку, которую реально видят сайты.</string>
+    <string name="ping_proxy_head">Proxy HEAD</string>
+    <string name="ping_proxy_head_help">Тот же запрос через туннель, но только заголовки. Чуть легче.</string>
+    <string name="ping_tcp">TCP-пинг</string>
+    <string name="ping_tcp_help">Время установки соединения с VPN-сервером. Расстояние до сервера, а не через него.</string>
+    <string name="ping_udp">UDP-пинг</string>
+    <string name="ping_udp_help">Один DNS-обмен по UDP с 1.1.1.1 напрямую, мимо VPN. Показывает состояние вашей собственной сети.</string>
 </resources>

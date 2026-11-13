@@ -1,5 +1,10 @@
 package com.vauth.foxyvpn.ui.screens
 
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material3.RadioButton
+import androidx.compose.ui.Alignment
 import com.vauth.foxyvpn.ui.components.GlassTextButton
 import com.vauth.foxyvpn.ui.components.GlassAlertDialog
 import com.vauth.foxyvpn.ui.components.GlassButton
@@ -117,6 +122,19 @@ fun SettingsScreen(
     var splitTunnelMode by remember { mutableStateOf(settingsStore.splitTunnelMode) }
     var mtu by remember { mutableIntStateOf(settingsStore.mtu) }
     var latencyProbeUrl by remember { mutableStateOf(settingsStore.latencyProbeUrl) }
+    var pingMethod by remember { mutableStateOf(settingsStore.pingMethod) }
+    var showPingDialog by remember { mutableStateOf(false) }
+    if (showPingDialog) {
+        PingMethodDialog(
+            current = pingMethod,
+            onDismiss = { showPingDialog = false },
+            onConfirm = {
+                settingsStore.pingMethod = it
+                pingMethod = it
+                showPingDialog = false
+            },
+        )
+    }
     var httpVersion by remember { mutableStateOf(settingsStore.httpVersion) }
     var tlsFragmentMode by remember { mutableStateOf(settingsStore.tlsFragmentMode) }
     var fragmentFallbackDelay by remember { mutableIntStateOf(settingsStore.fragmentFallbackDelay) }
@@ -396,6 +414,14 @@ fun SettingsScreen(
                                     .show()
                             }
                     },
+            )
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_ping_method)) },
+                supportingContent = { Text(pingMethod.label()) },
+                trailingContent = {
+                    Icon(painterResource(R.drawable.lucide_chevron_right), contentDescription = null)
+                },
+                modifier = Modifier.clickable { showPingDialog = true },
             )
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_latency_test_url)) },
@@ -879,5 +905,74 @@ private fun SectionLabel(text: String) {
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(start = 28.dp, end = 28.dp, top = 20.dp, bottom = 8.dp),
+    )
+}
+
+@Composable
+private fun SettingsStore.PingMethod.label(): String =
+    stringResource(
+        when (this) {
+            SettingsStore.PingMethod.PROXY_GET -> R.string.ping_proxy_get
+            SettingsStore.PingMethod.PROXY_HEAD -> R.string.ping_proxy_head
+            SettingsStore.PingMethod.TCP -> R.string.ping_tcp
+            SettingsStore.PingMethod.UDP -> R.string.ping_udp
+        }
+    )
+
+@Composable
+private fun SettingsStore.PingMethod.help(): String =
+    stringResource(
+        when (this) {
+            SettingsStore.PingMethod.PROXY_GET -> R.string.ping_proxy_get_help
+            SettingsStore.PingMethod.PROXY_HEAD -> R.string.ping_proxy_head_help
+            SettingsStore.PingMethod.TCP -> R.string.ping_tcp_help
+            SettingsStore.PingMethod.UDP -> R.string.ping_udp_help
+        }
+    )
+
+@Composable
+private fun PingMethodDialog(
+    current: SettingsStore.PingMethod,
+    onDismiss: () -> Unit,
+    onConfirm: (SettingsStore.PingMethod) -> Unit,
+) {
+    var selected by remember { mutableStateOf(current) }
+    GlassAlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_ping_method)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()).selectableGroup()) {
+                SettingsStore.PingMethod.entries.forEach { method ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier =
+                            Modifier.fillMaxWidth()
+                                .selectable(
+                                    selected = selected == method,
+                                    role = Role.RadioButton,
+                                    onClick = { selected = method },
+                                )
+                                .heightIn(min = 48.dp)
+                                .padding(vertical = 4.dp),
+                    ) {
+                        RadioButton(selected = selected == method, onClick = null)
+                        Column(Modifier.padding(start = 8.dp)) {
+                            Text(method.label())
+                            Text(
+                                method.help(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            GlassTextButton(onClick = { onConfirm(selected) }) { Text(stringResource(R.string.save)) }
+        },
+        dismissButton = {
+            GlassTextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        },
     )
 }

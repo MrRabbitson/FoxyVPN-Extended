@@ -96,6 +96,26 @@ class SettingsStore(context: Context) {
             prefs.edit().putString(KEY_LATENCY_PROBE_URL, url).apply()
         }
 
+    /** How the latency shown on the home screen is measured. */
+    enum class PingMethod {
+        /** HTTPS GET of the probe URL through the tunnel. */
+        PROXY_GET,
+        /** HTTPS HEAD of the probe URL through the tunnel: same path, no body. */
+        PROXY_HEAD,
+        /** Time to open a TCP connection to the VPN server. */
+        TCP,
+        /** Time for one UDP DNS exchange with a public resolver. */
+        UDP,
+    }
+
+    var pingMethod: PingMethod
+        get() =
+            PingMethod.entries.firstOrNull { it.name == prefs.getString(KEY_PING_METHOD, null) }
+                ?: PingMethod.PROXY_GET
+        set(value) {
+            prefs.edit().putString(KEY_PING_METHOD, value.name).apply()
+        }
+
     var mtu: Int
         get() = prefs.getInt(KEY_CUSTOM_MTU, DEFAULT_MTU)
         set(value) {
@@ -642,6 +662,7 @@ class SettingsStore(context: Context) {
     companion object {
         const val DEFAULT_LATENCY_PROBE_URL = "https://www.gstatic.com/generate_204"
         private const val KEY_LATENCY_PROBE_URL = "latency_probe_url"
+        private const val KEY_PING_METHOD = "ping_method"
 
         fun isValidProbeUrl(value: String): Boolean =
             runCatching {
