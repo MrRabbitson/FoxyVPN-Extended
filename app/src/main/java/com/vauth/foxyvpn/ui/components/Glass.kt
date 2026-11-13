@@ -1,7 +1,18 @@
 package com.vauth.foxyvpn.ui.components
 
-import androidx.compose.runtime.State
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import kotlin.math.max
+import kotlin.math.roundToInt
+import androidx.compose.ui.graphics.Canvas as ComposeCanvas
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.toSize
@@ -130,9 +141,8 @@ fun Modifier.glassSource(source: GlassSource): Modifier =
 class GlassBackdrop {
     internal var origin by mutableStateOf(Offset.Zero)
     internal var area by mutableStateOf(Size.Zero)
-    internal var dark by mutableStateOf(true)
-    internal var base by mutableStateOf(Color.Black)
-    internal var glow: State<Float> = mutableFloatStateOf(1f)
+    /** The whole backdrop, blurred; panes show the piece of it that is behind them. */
+    internal var blurred by mutableStateOf<ImageBitmap?>(null)
 }
 
 /** Null inside dialogs, which live in their own window. */
@@ -187,10 +197,11 @@ fun GlassSurface(
     }
     var position by remember { mutableStateOf(Offset.Zero) }
 
-    val scrim = if (dark) Color.Black.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.10f)
-    val bodyTop = Color.White.copy(alpha = if (dark) 0.08f else 0.30f)
-    val bodyBottom = Color.White.copy(alpha = if (dark) 0.02f else 0.12f)
-    val sheenTop = Color.White.copy(alpha = if (dark) 0.07f else 0.22f)
+    // Only a whisper of white over the blurred backdrop: the colour comes from
+    // what is behind the pane, not from a fill.
+    val bodyTop = Color.White.copy(alpha = if (dark) 0.07f else 0.24f)
+    val bodyBottom = Color.White.copy(alpha = if (dark) 0.00f else 0.06f)
+    val sheenTop = Color.White.copy(alpha = if (dark) 0.06f else 0.20f)
     val rimBright = Color.White.copy(alpha = if (dark) 0.50f else 0.95f)
     val rimDim = Color.White.copy(alpha = if (dark) 0.06f else 0.35f)
 
@@ -237,15 +248,18 @@ fun GlassSurface(
                     onDrawWithContent {
                         if (backdrop != null) {
                             val at = position
-                            // The backdrop as seen through the glass: same colours, out of focus.
-                            translate(backdrop.origin.x - at.x, backdrop.origin.y - at.y) {
-                                drawFlameField(
-                                    area = backdrop.area,
-                                    glow = backdrop.glow.value,
-                                    dark = backdrop.dark,
-                                    base = backdrop.base,
-                                    soft = true,
-                                )
+                            // The piece of the blurred backdrop that lies behind this pane.
+                            val image = backdrop.blurred
+                            val area = backdrop.area
+                            if (image != null && area.width > 0f) {
+                                translate(backdrop.origin.x - at.x, backdrop.origin.y - at.y) {
+                                    drawImage(
+                                        image = image,
+                                        dstSize = IntSize(area.width.roundToInt(), area.height.roundToInt()),
+                                        colorFilter = Vivid,
+                                        filterQuality = FilterQuality.Medium,
+                                    )
+                                }
                             }
                             // Content scrolling under the pane is blurred live.
                             if (over != null && BlurSupported) {
@@ -258,7 +272,6 @@ fun GlassSurface(
                                 drawLayer(pane)
                             }
                         }
-                        drawOutline(outline, scrim)
                         if (tint.isSpecified) drawOutline(outline, tint)
                         drawOutline(outline, body)
                         drawOutline(outline, sheen)
@@ -516,66 +529,123 @@ private val Discs =
         Disc(FoxYellow, 0.62f, 0.90f, 0.11f, warm = true, weight = 0.7f),
     )
 
-/**
- * Paints the backdrop. In focus the discs have crisp edges; [soft] paints the
- * same discs the way they look through frosted glass: spread out and diffuse.
- */
-private fun DrawScope.drawFlameField(area: Size, glow: Float, dark: Boolean, base: Color, soft: Boolean) {
-    if (area.width <= 0f || area.height <= 0f) return
-    drawRect(base, size = area)
+/** Paints the backdrop: crisp discs of flame colour on the theme background. */
+private fun DrawScope.drawFlameField(glow: Float, dark: Boolean, base: Color) {
+    drawRect(base)
     val warm = (if (dark) 0.80f else 0.62f) * (0.55f + 0.45f * glow)
     val cool = if (dark) 0.62f else 0.42f
     for (disc in Discs) {
         val strength = (if (disc.warm) warm else cool) * disc.weight
-        val at = Offset(area.width * disc.x, area.height * disc.y)
-        val radius = area.width * disc.radius * (if (soft) 1.5f else 1f)
-        val brush =
-            if (soft) {
-                Brush.radialGradient(
-                    0f to disc.color.copy(alpha = strength * 0.78f),
-                    0.45f to disc.color.copy(alpha = strength * 0.46f),
-                    1f to disc.color.copy(alpha = 0f),
-                    center = at,
-                    radius = radius,
-                )
-            } else {
+        val at = Offset(size.width * disc.x, size.height * disc.y)
+        val radius = size.width * disc.radius
+        drawCircle(
+            brush =
                 Brush.radialGradient(
                     0f to disc.color.copy(alpha = strength),
                     0.95f to disc.color.copy(alpha = strength * 0.9f),
                     1f to disc.color.copy(alpha = 0f),
                     center = at,
                     radius = radius,
-                )
-            }
-        drawCircle(brush, radius = radius, center = at)
+                ),
+            radius = radius,
+            center = at,
+        )
     }
+}
+
+/** Slight saturation lift, as glass does to what is seen through it. */
+private val Vivid = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(1.35f) })
+
+private const val BLUR_WIDTH = 96
+
+/**
+ * A blurred picture of the whole backdrop. It is painted small and blurred in
+ * software, which works on every Android version; stretched back to full size
+ * it is a wide, even blur with the colours at full strength.
+ */
+private fun renderBlurredField(area: Size, glow: Float, dark: Boolean, base: Color, density: Density): ImageBitmap? {
+    if (area.width < 1f || area.height < 1f) return null
+    val w = BLUR_WIDTH
+    val h = max(1, (BLUR_WIDTH * area.height / area.width).roundToInt())
+    val bitmap = ImageBitmap(w, h)
+    CanvasDrawScope().draw(density, LayoutDirection.Ltr, ComposeCanvas(bitmap), Size(w.toFloat(), h.toFloat())) {
+        drawFlameField(glow, dark, base)
+    }
+    val native = bitmap.asAndroidBitmap()
+    var pixels = IntArray(w * h)
+    native.getPixels(pixels, 0, w, 0, 0, w, h)
+    repeat(3) { pixels = boxBlur(pixels, w, h, radius = 3) }
+    native.setPixels(pixels, 0, w, 0, 0, w, h)
+    return bitmap
+}
+
+/** One box-blur pass over opaque pixels; three passes approximate a Gaussian. */
+private fun boxBlur(source: IntArray, w: Int, h: Int, radius: Int): IntArray {
+    val window = radius * 2 + 1
+    val temp = IntArray(source.size)
+    for (y in 0 until h) {
+        for (x in 0 until w) {
+            var r = 0
+            var g = 0
+            var b = 0
+            for (k in -radius..radius) {
+                val p = source[y * w + (x + k).coerceIn(0, w - 1)]
+                r += (p shr 16) and 0xFF
+                g += (p shr 8) and 0xFF
+                b += p and 0xFF
+            }
+            temp[y * w + x] = (0xFF shl 24) or ((r / window) shl 16) or ((g / window) shl 8) or (b / window)
+        }
+    }
+    val result = IntArray(source.size)
+    for (y in 0 until h) {
+        for (x in 0 until w) {
+            var r = 0
+            var g = 0
+            var b = 0
+            for (k in -radius..radius) {
+                val p = temp[(y + k).coerceIn(0, h - 1) * w + x]
+                r += (p shr 16) and 0xFF
+                g += (p shr 8) and 0xFF
+                b += p and 0xFF
+            }
+            result[y * w + x] = (0xFF shl 24) or ((r / window) shl 16) or ((g / window) shl 8) or (b / window)
+        }
+    }
+    return result
 }
 
 /**
  * The backdrop every screen sits on: still discs of flame colour with crisp
- * edges, so it is obvious what the glass above them does. Nothing moves on its
- * own; the warm discs brighten or dim with [intensity].
+ * edges. Nothing moves on its own; the warm discs brighten or dim with
+ * [intensity]. It also keeps [state] supplied with its blurred twin.
  */
 @Composable
 fun FlameBackdrop(state: GlassBackdrop, modifier: Modifier = Modifier, intensity: Float = 1f) {
     val base = MaterialTheme.colorScheme.background
     val dark = base.luma() < 0.3f
-    val glow =
+    val glow by
         animateFloatAsState(
             targetValue = intensity,
             animationSpec = tween(1_400, easing = EmphasizedEasing),
             label = "backdrop-glow",
         )
-    state.glow = glow
-    state.dark = dark
-    state.base = base
+    val density = LocalDensity.current
+    // Re-blur in a few steps while the glow animates rather than every frame.
+    val glowStep = (glow * 16f).roundToInt()
+    val area = state.area
+    val blurred =
+        remember(area, dark, base, glowStep) {
+            renderBlurredField(area, glowStep / 16f, dark, base, density)
+        }
+    SideEffect { state.blurred = blurred }
     Canvas(
         modifier.onGloballyPositioned {
             state.origin = it.positionInRoot()
             state.area = it.size.toSize()
         }
     ) {
-        drawFlameField(area = size, glow = glow.value, dark = dark, base = base, soft = false)
+        drawFlameField(glow = glowStep / 16f, dark = dark, base = base)
     }
 }
 

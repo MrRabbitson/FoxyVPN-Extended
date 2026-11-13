@@ -1,5 +1,7 @@
 package com.vauth.foxyvpn.ui.screens
 
+import com.vauth.foxyvpn.data.model.RECOMMENDED_COUNTRY_CODE
+import com.vauth.foxyvpn.data.model.countryCodeToEmojiFlag
 import androidx.compose.foundation.background
 import com.vauth.foxyvpn.ui.components.GlassIconButton
 import com.vauth.foxyvpn.ui.components.GlassRim
@@ -392,6 +394,22 @@ Box(
                                         Text(
                                             name,
                                             style = MaterialTheme.typography.titleMedium,
+                                        )
+                                    }
+                                    // "Recommended" hides the real exit; name it once connected.
+                                    val exitCode = vpnEdgeIp?.countryCode.orEmpty()
+                                    val onRecommended =
+                                        displayProxy == null ||
+                                            displayProxy.countryCode.equals(RECOMMENDED_COUNTRY_CODE, ignoreCase = true)
+                                    if (state == ConnectionState.CONNECTED && onRecommended && exitCode.length == 2) {
+                                        val exitName = localizedCountryName(exitCode, exitCode)
+                                        Text(
+                                            stringResource(
+                                                R.string.home_connected_to,
+                                                "${countryCodeToEmojiFlag(exitCode)} $exitName".trim(),
+                                            ),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     }
                                     if (

@@ -297,4 +297,5 @@
     <string name="error_no_servers_location">В выбранной локации нет доступных серверов. Выберите другую.</string>
     <string name="session_changed_sign_out">Сессия изменилась. Попробуйте выйти ещё раз.</string>
     <string name="update_network_error">ошибка сети</string>
+    <string name="home_connected_to">Сейчас подключено: %1$s</string>
 </resources>
