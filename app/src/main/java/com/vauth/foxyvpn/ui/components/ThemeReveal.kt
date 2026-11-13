@@ -1,5 +1,6 @@
 package com.vauth.foxyvpn.ui.components
 
+import kotlinx.coroutines.withTimeoutOrNull
 import android.app.Activity
 import android.graphics.Rect
 import android.os.Handler
@@ -89,15 +90,24 @@ val LocalThemeReveal = staticCompositionLocalOf<ThemeReveal?> { null }
 fun ThemeRevealOverlay(reveal: ThemeReveal) {
     val photo = reveal.snapshot ?: return
     val progress = androidx.compose.runtime.remember(photo) { Animatable(0f) }
+    val screen = LocalGlassContent.current
     LaunchedEffect(photo) {
         try {
             // Let the new theme compose and draw underneath before uncovering it,
-            // so that work does not land in the middle of the animation.
-            GlassClock.keepLive(900L)
-            repeat(3) { withFrameNanos {} }
-            progress.animateTo(1f, tween(480, easing = EmphasizedEasing))
+            // and wait for the glass to pick it up, so neither lands mid-animation.
+            GlassClock.keepLive(600L)
+            repeat(2) { withFrameNanos {} }
+            if (screen != null) {
+                val seen = screen.pictureCount()
+                withTimeoutOrNull(260L) { while (screen.pictureCount() < seen + 2) withFrameNanos {} }
+            }
+            // Nothing but the circle runs from here on.
+            setGlassPaused(true)
+            progress.animateTo(1f, tween(460, easing = EmphasizedEasing))
         } finally {
+            setGlassPaused(false)
             reveal.finish()
+            GlassClock.keepLive(300L)
         }
     }
     Canvas(Modifier.fillMaxSize()) {
