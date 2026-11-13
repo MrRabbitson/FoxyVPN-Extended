@@ -1,5 +1,8 @@
 package com.vauth.foxyvpn.ui.navigation
 
+import com.vauth.foxyvpn.ui.components.GlassTopBarHost
+import com.vauth.foxyvpn.ui.components.LocalTopBarHost
+import com.vauth.foxyvpn.ui.components.TopBarHost
 import androidx.compose.runtime.CompositionLocalProvider
 import com.vauth.foxyvpn.ui.components.LocalGlassContent
 import androidx.compose.runtime.LaunchedEffect
@@ -103,10 +106,11 @@ fun FoxyNavGraph(
         }
     }
     val screens = rememberGlassSource()
+    val topBar = remember { TopBarHost() }
     LaunchedEffect(route) { GlassClock.keepLive(900L) }
     Box(Modifier.fillMaxSize()) {
     Box(Modifier.fillMaxSize().glassSource(screens)) {
-    CompositionLocalProvider(LocalGlassContent provides screens) {
+    CompositionLocalProvider(LocalGlassContent provides screens, LocalTopBarHost provides topBar) {
     NavHost(
         navController = navController,
         startDestination = FoxyRoutes.SPLASH,
@@ -265,6 +269,7 @@ fun FoxyNavGraph(
     }
     }
     }
+        GlassTopBarHost(topBar, over = screens)
         AnimatedVisibility(
             visible = tabbed,
             modifier = Modifier.align(Alignment.BottomCenter),

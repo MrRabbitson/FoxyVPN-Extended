@@ -1,5 +1,10 @@
 package com.vauth.foxyvpn.ui.components
 
+import android.app.Activity
+import android.graphics.Rect
+import android.os.Handler
+import android.os.Looper
+import android.view.PixelCopy
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.unit.IntSize
@@ -18,7 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Rect as ComposeRect
 import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
@@ -41,35 +46,39 @@ class ThemeReveal {
 
     /** [view] is the app's root view; [center] the button centre in root coordinates. */
     fun start(view: View, center: Offset, change: () -> Unit) {
-        if (snapshot != null || view.width <= 0 || view.height <= 0) {
+        val window = (view.context as? Activity)?.window
+        if (snapshot != null || window == null || view.width <= 0 || view.height <= 0) {
             change()
             return
         }
-        val photo =
-            try {
-                // Half resolution: a quarter of the pixels to draw and to keep on
-                // screen, and it is only visible for half a second.
-                val w = max(1, view.width / 2)
-                val h = max(1, view.height / 2)
-                val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                val canvas = android.graphics.Canvas(bitmap)
-                canvas.scale(w / view.width.toFloat(), h / view.height.toFloat())
-                withGlassPaused { view.draw(canvas) }
-                bitmap.asImageBitmap()
-            } catch (error: Exception) {
-                AppLogger.w("ThemeReveal", "could not photograph the screen; switching without animation", error)
-                null
-            }
-        this.center = center
-        snapshot = photo
-        if (photo != null) setGlassPaused(true)
-        change()
+        // Copy what is on screen straight from the GPU, at half resolution.
+        val bitmap =
+            Bitmap.createBitmap(max(1, view.width / 2), max(1, view.height / 2), Bitmap.Config.ARGB_8888)
+        val corner = IntArray(2)
+        view.getLocationInWindow(corner)
+        val bounds = Rect(corner[0], corner[1], corner[0] + view.width, corner[1] + view.height)
+        try {
+            PixelCopy.request(
+                window,
+                bounds,
+                bitmap,
+                { result ->
+                    if (result == PixelCopy.SUCCESS && snapshot == null) {
+                        this.center = center
+                        snapshot = bitmap.asImageBitmap()
+                    }
+                    change()
+                },
+                Handler(Looper.getMainLooper()),
+            )
+        } catch (error: Exception) {
+            AppLogger.w("ThemeReveal", "could not copy the screen; switching without animation", error)
+            change()
+        }
     }
 
     internal fun finish() {
         snapshot = null
-        setGlassPaused(false)
-        GlassClock.keepLive(300L)
     }
 }
 
@@ -84,6 +93,7 @@ fun ThemeRevealOverlay(reveal: ThemeReveal) {
         try {
             // Let the new theme compose and draw underneath before uncovering it,
             // so that work does not land in the middle of the animation.
+            GlassClock.keepLive(900L)
             repeat(3) { withFrameNanos {} }
             progress.animateTo(1f, tween(480, easing = EmphasizedEasing))
         } finally {
@@ -98,7 +108,7 @@ fun ThemeRevealOverlay(reveal: ThemeReveal) {
                 max(hypot(c.x, size.height - c.y), hypot(size.width - c.x, size.height - c.y)),
             )
         val radius = reach * progress.value
-        val hole = Path().apply { addOval(Rect(center = c, radius = radius)) }
+        val hole = Path().apply { addOval(ComposeRect(center = c, radius = radius)) }
         clipPath(hole, clipOp = ClipOp.Difference) {
             drawImage(
                 image = photo,

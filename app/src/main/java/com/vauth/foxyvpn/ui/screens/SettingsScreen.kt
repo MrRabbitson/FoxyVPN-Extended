@@ -1,6 +1,5 @@
 package com.vauth.foxyvpn.ui.screens
 
-import com.vauth.foxyvpn.ui.components.LocalGlassContent
 import com.vauth.foxyvpn.ui.components.GlassTextButton
 import com.vauth.foxyvpn.ui.components.GlassAlertDialog
 import com.vauth.foxyvpn.ui.components.GlassButton
@@ -344,13 +343,11 @@ fun SettingsScreen(
         )
     }
 
-    val listContent = LocalGlassContent.current
     Scaffold(
         topBar = {
             GlassTopBar(
                 title = stringResource(R.string.settings_title),
                 onBack = if (showBack) onBack else null,
-                over = listContent,
             )
         }
     ) { padding ->

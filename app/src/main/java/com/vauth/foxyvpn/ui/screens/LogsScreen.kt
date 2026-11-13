@@ -1,6 +1,5 @@
 package com.vauth.foxyvpn.ui.screens
 
-import com.vauth.foxyvpn.ui.components.LocalGlassContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -102,7 +101,6 @@ fun LogsScreen(
             }
         }
 
-    val listContent = LocalGlassContent.current
     Scaffold(
         topBar = {
             GlassTopBar(
@@ -113,7 +111,6 @@ fun LogsScreen(
                         stringResource(R.string.logs_title_filtered, visible.size, entries.size)
                     },
                 onBack = onBack,
-                over = listContent,
             ) {
                 BarAction(
                     icon = R.drawable.lucide_share_2,

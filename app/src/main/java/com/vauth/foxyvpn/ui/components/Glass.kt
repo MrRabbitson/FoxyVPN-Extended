@@ -1,14 +1,22 @@
 package com.vauth.foxyvpn.ui.components
 
+import android.graphics.Bitmap
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.layout.positionOnScreen
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import android.os.SystemClock
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.graphics.drawscope.ContentDrawScope
-import androidx.compose.ui.graphics.drawscope.draw
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import com.vauth.foxyvpn.data.AppLogger
@@ -37,7 +45,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.toSize
 import android.os.Build
-import android.view.WindowManager
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -104,7 +111,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.DialogWindowProvider
 import com.vauth.foxyvpn.R
 import com.vauth.foxyvpn.ui.theme.FoxMagenta
 import com.vauth.foxyvpn.ui.theme.FoxOrange
@@ -160,36 +166,26 @@ fun Modifier.glassTouchWatch(): Modifier =
         }
     }
 
-/** True while a source is being drawn off-screen; floating panes leave themselves out of it. */
-private var capturing = false
-/** True while something else needs every frame (the theme reveal); no pictures are taken then. */
-private var capturePaused = false
-
-/** Runs [block] with glass pictures switched off. */
-internal fun <T> withGlassPaused(block: () -> T): T {
-    val before = capturePaused
-    capturePaused = true
-    try {
-        return block()
-    } finally {
-        capturePaused = before
-    }
-}
-
-internal fun setGlassPaused(paused: Boolean) {
-    capturePaused = paused
-}
-/** Set if drawing content off-screen ever fails on this device; glass then shows the backdrop only. */
+/** Set if reading the picture back ever fails on this device; glass then shows the backdrop only. */
 private var captureBroken = false
 
 /**
- * Something glass can sit on top of. Each time the node carrying
- * [glassSource] is drawn, a small blurred picture of it (on top of the
- * backdrop) is kept, and panes above show the piece that lies behind them.
- * This is what CSS calls backdrop-filter: blur, done by hand so that it works
- * on every Android version.
+ * Something glass can sit on top of. The node carrying [glassSource] draws
+ * into a layer; a thumbnail of that layer (on top of the backdrop) is rendered
+ * by the GPU, read back, blurred and kept, and panes above show the piece that
+ * lies behind them. This is what CSS calls backdrop-filter: blur, done by hand
+ * so that it works on every Android version.
+ *
+ * Nothing that uses the picture may live inside the source, or it would end up
+ * in its own background.
  */
-class GlassSource internal constructor(private val backdrop: GlassBackdrop?) {
+class GlassSource
+internal constructor(
+    private val backdrop: GlassBackdrop?,
+    internal val layer: GraphicsLayer,
+    private val thumbnail: GraphicsLayer,
+    private val coroutines: CoroutineScope,
+) {
     internal var origin by mutableStateOf(Offset.Zero)
     internal var area = Size.Zero
         private set
@@ -197,83 +193,94 @@ class GlassSource internal constructor(private val backdrop: GlassBackdrop?) {
         private set
 
     private var frame by mutableIntStateOf(0)
-    internal var capturedAt = 0L
-    private var canvas: ComposeCanvas? = null
+    private var takenAt = 0L
+    private var busy = false
+    private var output: Bitmap? = null
     private var pixels = IntArray(0)
     private var scratch = IntArray(0)
 
     /** Subscribes the caller to new pictures of this source. */
     internal fun observe(): Int = frame
 
-    internal fun capture(scope: ContentDrawScope) {
+    /** Called right after [layer] was recorded. */
+    internal fun snap(scope: DrawScope) {
+        val now = SystemClock.uptimeMillis()
+        if (busy || captureBroken || now - takenAt < CAPTURE_INTERVAL_MS) return
         val full = scope.size
         if (full.width < 1f || full.height < 1f) return
         val scale = CAPTURE_WIDTH / full.width
         val w = CAPTURE_WIDTH
         val h = max(1, (full.height * scale).roundToInt())
-        var bitmap = blurred
-        var target = canvas
-        if (bitmap == null || target == null || bitmap.width != w || bitmap.height != h) {
-            bitmap = ImageBitmap(w, h)
-            target = ComposeCanvas(bitmap)
-            canvas = target
-            pixels = IntArray(w * h)
-            scratch = IntArray(w * h)
-        }
-        val native = target.nativeCanvas
-        val checkpoint = native.save()
-        try {
-            native.scale(scale, scale)
-            val behind = backdrop
-            if (behind != null && behind.area.width > 0f) {
-                native.save()
-                native.translate(behind.origin.x - origin.x, behind.origin.y - origin.y)
-                scope.draw(scope, scope.layoutDirection, target, behind.area) {
-                    drawFlameField(behind.glow, behind.dark, behind.base)
+        val behind = backdrop
+        val at = origin
+        with(scope) {
+            thumbnail.record(size = IntSize(w, h)) {
+                scale(scale, scale, pivot = Offset.Zero) {
+                    if (behind != null && behind.area.width > 0f) {
+                        translate(behind.origin.x - at.x, behind.origin.y - at.y) {
+                            drawFlameField(behind.area, behind.glow, behind.dark, behind.base)
+                        }
+                    } else {
+                        drawRect(Color.Black, size = full)
+                    }
+                    drawLayer(layer)
                 }
-                native.restore()
-            } else {
-                native.drawColor(android.graphics.Color.BLACK)
             }
-            scope.draw(scope, scope.layoutDirection, target, full) { scope.drawContent() }
-        } finally {
-            native.restoreToCount(checkpoint)
         }
-        val raw = bitmap.asAndroidBitmap()
-        raw.getPixels(pixels, 0, w, 0, 0, w, h)
-        boxBlur(pixels, scratch, w, h, radius = 2)
-        boxBlur(pixels, scratch, w, h, radius = 2)
-        raw.setPixels(pixels, 0, w, 0, 0, w, h)
-        area = full
-        blurred = bitmap
-        Snapshot.withoutReadObservation { frame++ }
+        busy = true
+        takenAt = now
+        coroutines.launch {
+            try {
+                var raw = thumbnail.toImageBitmap().asAndroidBitmap()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && raw.config == Bitmap.Config.HARDWARE) {
+                    raw = raw.copy(Bitmap.Config.ARGB_8888, false)
+                }
+                val rw = raw.width
+                val rh = raw.height
+                if (pixels.size != rw * rh) {
+                    pixels = IntArray(rw * rh)
+                    scratch = IntArray(rw * rh)
+                }
+                raw.getPixels(pixels, 0, rw, 0, 0, rw, rh)
+                boxBlur(pixels, scratch, rw, rh, radius = 2)
+                boxBlur(pixels, scratch, rw, rh, radius = 2)
+                var out = output
+                if (out == null || out.width != rw || out.height != rh) {
+                    out = Bitmap.createBitmap(rw, rh, Bitmap.Config.ARGB_8888)
+                    output = out
+                    blurred = out.asImageBitmap()
+                }
+                out.setPixels(pixels, 0, rw, 0, 0, rw, rh)
+                area = full
+                frame++
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                captureBroken = true
+                AppLogger.w("Glass", "reading the picture back failed; glass shows the backdrop only", error)
+            } finally {
+                busy = false
+            }
+        }
     }
 }
 
 @Composable
 fun rememberGlassSource(): GlassSource {
     val backdrop = LocalGlassBackdrop.current
-    return remember(backdrop) { GlassSource(backdrop) }
+    val layer = rememberGraphicsLayer()
+    val thumbnail = rememberGraphicsLayer()
+    val coroutines = rememberCoroutineScope()
+    return remember(backdrop, layer, thumbnail) { GlassSource(backdrop, layer, thumbnail, coroutines) }
 }
 
 fun Modifier.glassSource(source: GlassSource): Modifier =
     this.onGloballyPositioned { source.origin = it.positionInRoot() }
         .drawWithContent {
             GlassClock.observe()
-            drawContent()
-            val now = SystemClock.uptimeMillis()
-            if (!capturing && !captureBroken && !capturePaused && now - source.capturedAt >= CAPTURE_INTERVAL_MS) {
-                source.capturedAt = now
-                capturing = true
-                try {
-                    source.capture(this)
-                } catch (error: Exception) {
-                    captureBroken = true
-                    AppLogger.w("Glass", "off-screen capture is unavailable; glass shows the backdrop only", error)
-                } finally {
-                    capturing = false
-                }
-            }
+            source.layer.record { this@drawWithContent.drawContent() }
+            drawLayer(source.layer)
+            source.snap(this)
         }
 
 /**
@@ -287,6 +294,8 @@ class GlassBackdrop {
     internal var glow = 1f
     internal var dark = true
     internal var base = Color.Black
+    /** Where the app's root sits on the physical screen; dialogs need it. */
+    internal var onScreen = Offset.Zero
 }
 
 /** Null inside dialogs, which live in their own window. */
@@ -385,8 +394,6 @@ fun GlassSurface(
                     // Half of the stroke is clipped away, leaving a 1dp inner rim.
                     val edgeStroke = Stroke(width = 2.dp.toPx())
                     onDrawWithContent {
-                        // A pane floating over content is not part of what is behind it.
-                        if (capturing && over != null) return@onDrawWithContent
                         if (backdrop != null) {
                             val at = position
                             // What is behind this pane, blurred: the content it floats
@@ -618,66 +625,119 @@ fun GlassIconButton(
     }
 }
 
+private class TopBarSpec(
+    val owner: Any,
+    val title: String,
+    val onBack: (() -> Unit)?,
+    val leading: (@Composable () -> Unit)?,
+    val actions: @Composable RowScope.() -> Unit,
+)
+
 /**
- * Floating glass bar at the top of a screen. Pass the screen's scrolling
- * content as [over] so it shows through the bar as it scrolls underneath.
+ * Holds the top bar the current screen asked for. The bar itself is drawn by
+ * [GlassTopBarHost], above and outside the screen, because it shows a picture
+ * of the screen and so cannot be part of it.
  */
-@Composable
-fun GlassTopBar(
-    title: String,
-    onBack: (() -> Unit)?,
-    over: GlassSource? = null,
-    modifier: Modifier = Modifier,
-    leading: (@Composable () -> Unit)? = null,
-    actions: @Composable RowScope.() -> Unit = {},
-) {
-    Box(
-        modifier.fillMaxWidth()
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-    ) {
-        GlassSurface(
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-            shape = RoundedCornerShape(28.dp),
-            rim = GlassRim.Vertical,
-            over = over,
+class TopBarHost {
+    private var specs by mutableStateOf(listOf<TopBarSpec>())
+
+    private fun put(spec: TopBarSpec) {
+        val index = specs.indexOfFirst { it.owner === spec.owner }
+        specs = if (index < 0) specs + spec else specs.toMutableList().also { it[index] = spec }
+    }
+
+    private fun drop(owner: Any) {
+        specs = specs.filterNot { it.owner === owner }
+    }
+
+    internal fun show(owner: Any, title: String, onBack: (() -> Unit)?, leading: (@Composable () -> Unit)?, actions: @Composable RowScope.() -> Unit) =
+        put(TopBarSpec(owner, title, onBack, leading, actions))
+
+    internal fun hide(owner: Any) = drop(owner)
+
+    /** The most recently opened screen wins while two overlap in a transition. */
+    @Composable
+    internal fun Current(over: GlassSource?) {
+        val spec = specs.lastOrNull() ?: return
+        Box(
+            Modifier.fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            contentAlignment = Alignment.TopCenter,
         ) {
-            Row(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            GlassSurface(
+                modifier = Modifier.widthIn(max = 520.dp).fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(28.dp),
+                rim = GlassRim.Vertical,
+                over = over,
             ) {
-                if (onBack != null) {
-                    Box(
-                        Modifier.size(44.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onBack),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            painterResource(R.drawable.lucide_arrow_left),
-                            contentDescription = stringResource(R.string.action_back),
-                            modifier = Modifier.size(22.dp),
-                        )
+                Row(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    val back = spec.onBack
+                    if (back != null) {
+                        Box(
+                            Modifier.size(44.dp).clip(CircleShape).clickable(role = Role.Button, onClick = back),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                painterResource(R.drawable.lucide_arrow_left),
+                                contentDescription = stringResource(R.string.action_back),
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
+                    } else {
+                        Spacer(Modifier.width(if (spec.leading == null) 10.dp else 6.dp))
                     }
+                    spec.leading?.invoke()
+                    Text(
+                        spec.title,
+                        style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    spec.actions(this)
                 }
-                if (onBack == null) Spacer(Modifier.width(if (leading == null) 10.dp else 6.dp))
-                leading?.invoke()
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                actions()
             }
         }
     }
 }
 
+val LocalTopBarHost = staticCompositionLocalOf<TopBarHost?> { null }
+
+/** Draws the bar the current screen registered. Place above the screens, outside their source. */
+@Composable
+fun GlassTopBarHost(host: TopBarHost, over: GlassSource?) {
+    host.Current(over)
+}
+
 /**
- * Dialog on glass. The system blurs the whole screen behind the dialog window
- * (Android 12+, when the device allows it), so the translucent sheet reads as
- * frosted. Where that blur is unavailable the sheet is made nearly opaque.
+ * Declares the screen's top bar. Takes up the bar's room where it is placed;
+ * the bar itself is drawn by [GlassTopBarHost] so that the screen can show
+ * through it.
+ */
+@Composable
+fun GlassTopBar(
+    title: String,
+    onBack: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    leading: (@Composable () -> Unit)? = null,
+    actions: @Composable RowScope.() -> Unit = {},
+) {
+    val host = LocalTopBarHost.current
+    val owner = remember { Any() }
+    SideEffect { host?.show(owner, title, onBack, leading, actions) }
+    DisposableEffect(host, owner) { onDispose { host?.hide(owner) } }
+    Spacer(modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).height(72.dp))
+}
+
+/**
+ * Dialog on glass. A dialog lives in its own window, so it cannot see the app
+ * behind it; instead it paints the piece of the screen's blurred picture that
+ * it covers, found by comparing where both sit on the physical screen.
  */
 @Composable
 fun GlassAlertDialog(
@@ -689,68 +749,62 @@ fun GlassAlertDialog(
     text: @Composable (() -> Unit)? = null,
 ) {
     val dark = isDarkGlass()
-    val windowBlur = rememberWindowBlurEnabled()
-    val scheme = MaterialTheme.colorScheme
-    val sheet =
-        if (windowBlur) {
-            if (dark) Color(0xFF2B2A33).copy(alpha = 0.62f) else Color.White.copy(alpha = 0.68f)
-        } else {
-            scheme.surfaceContainerHigh
-        }
+    val backdrop = LocalGlassBackdrop.current
+    val screen = LocalGlassContent.current
+    val solid = MaterialTheme.colorScheme.surfaceContainerHigh
+    val veil = if (dark) Color(0xFF16151B).copy(alpha = 0.42f) else Color.White.copy(alpha = 0.46f)
+    val sheenTop = Color.White.copy(alpha = if (dark) 0.07f else 0.22f)
     val rimBright = Color.White.copy(alpha = if (dark) 0.45f else 0.95f)
     val rimDim = Color.White.copy(alpha = if (dark) 0.06f else 0.35f)
     val shape = RoundedCornerShape(28.dp)
 
-    // Panes inside the dialog live in another window, so they cannot sample
-    // the app's backdrop; they fall back to plain translucent glass.
+    // Panes inside the dialog cannot sample the app's backdrop either.
     CompositionLocalProvider(LocalGlassBackdrop provides null) {
+        var onScreen by remember { mutableStateOf(Offset.Zero) }
         AlertDialog(
             onDismissRequest = onDismissRequest,
             confirmButton = confirmButton,
             modifier =
-                modifier.border(
-                    1.dp,
-                    Brush.linearGradient(0f to rimBright, 0.3f to rimDim, 0.7f to rimDim, 1f to rimBright),
-                    shape,
-                ),
+                modifier
+                    .onGloballyPositioned {
+                        onScreen = it.positionOnScreen()
+                    }
+                    .clip(shape)
+                    .drawBehind {
+                        val picture = screen?.blurred
+                        if (screen != null && backdrop != null && picture != null) {
+                            screen.observe()
+                            val area = screen.area
+                            val left = backdrop.onScreen.x + screen.origin.x - onScreen.x
+                            val top = backdrop.onScreen.y + screen.origin.y - onScreen.y
+                            translate(left, top) {
+                                drawImage(
+                                    image = picture,
+                                    dstSize = IntSize(area.width.roundToInt(), area.height.roundToInt()),
+                                    colorFilter = Vivid,
+                                    filterQuality = FilterQuality.Low,
+                                )
+                            }
+                            drawRect(veil)
+                        } else {
+                            drawRect(solid)
+                        }
+                        drawRect(
+                            Brush.verticalGradient(0f to sheenTop, 1f to Color.Transparent, endY = size.height * 0.35f)
+                        )
+                    }
+                    .border(
+                        1.dp,
+                        Brush.linearGradient(0f to rimBright, 0.3f to rimDim, 0.7f to rimDim, 1f to rimBright),
+                        shape,
+                    ),
             dismissButton = dismissButton,
-            title = {
-                if (windowBlur) BlurBehindDialog()
-                title?.invoke()
-            },
+            title = title,
             text = text,
             shape = shape,
-            containerColor = sheet,
+            containerColor = Color.Transparent,
             tonalElevation = 0.dp,
         )
-    }
-}
-
-@Composable
-private fun rememberWindowBlurEnabled(): Boolean {
-    val view = LocalView.current
-    return remember(view) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            view.context.getSystemService(WindowManager::class.java)?.isCrossWindowBlurEnabled == true
-        } else {
-            false
-        }
-    }
-}
-
-/** Asks the system to blur everything behind the dialog this is placed in. */
-@Composable
-private fun BlurBehindDialog() {
-    val view = LocalView.current
-    val radius = with(LocalDensity.current) { 28.dp.roundToPx() }
-    DisposableEffect(view, radius) {
-        val window = (view.parent as? DialogWindowProvider)?.window
-        if (window != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
-            window.attributes = window.attributes.apply { blurBehindRadius = radius }
-            window.setDimAmount(0.28f)
-        }
-        onDispose {}
     }
 }
 
@@ -777,14 +831,14 @@ private val Discs =
  * Paints the backdrop: the theme background with a soft glow behind the top of
  * the screen. Quiet on purpose; the interface, not the wallpaper, is the subject.
  */
-private fun DrawScope.drawFlameField(glow: Float, dark: Boolean, base: Color) {
-    drawRect(base)
+private fun DrawScope.drawFlameField(area: Size, glow: Float, dark: Boolean, base: Color) {
+    drawRect(base, size = area)
     val warm = (if (dark) 0.30f else 0.22f) * (0.30f + 0.70f * glow)
     val cool = if (dark) 0.20f else 0.12f
     for (disc in Discs) {
         val strength = (if (disc.warm) warm else cool) * disc.weight
-        val at = Offset(size.width * disc.x, size.height * disc.y)
-        val radius = size.width * disc.radius
+        val at = Offset(area.width * disc.x, area.height * disc.y)
+        val radius = area.width * disc.radius
         drawCircle(
             brush =
                 Brush.radialGradient(
@@ -814,7 +868,7 @@ private fun renderBlurredField(area: Size, glow: Float, dark: Boolean, base: Col
     val h = max(1, (CAPTURE_WIDTH * area.height / area.width).roundToInt())
     val bitmap = ImageBitmap(w, h)
     CanvasDrawScope().draw(density, LayoutDirection.Ltr, ComposeCanvas(bitmap), Size(w.toFloat(), h.toFloat())) {
-        drawFlameField(glow, dark, base)
+        drawFlameField(size, glow, dark, base)
     }
     val native = bitmap.asAndroidBitmap()
     val pixels = IntArray(w * h)
@@ -901,13 +955,17 @@ fun FlameBackdrop(state: GlassBackdrop, modifier: Modifier = Modifier, intensity
     state.dark = dark
     state.base = base
     SideEffect { state.blurred = blurred }
+    val rootView = LocalView.current
     Canvas(
         modifier.onGloballyPositioned {
             state.origin = it.positionInRoot()
             state.area = it.size.toSize()
+            val corner = IntArray(2)
+            rootView.getLocationOnScreen(corner)
+            state.onScreen = Offset(corner[0].toFloat(), corner[1].toFloat())
         }
     ) {
-        drawFlameField(glow = glowStep / 16f, dark = dark, base = base)
+        drawFlameField(area = size, glow = glowStep / 16f, dark = dark, base = base)
     }
 }
 

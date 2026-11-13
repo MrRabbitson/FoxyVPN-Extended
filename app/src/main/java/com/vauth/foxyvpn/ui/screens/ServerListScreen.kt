@@ -1,6 +1,5 @@
 package com.vauth.foxyvpn.ui.screens
 
-import com.vauth.foxyvpn.ui.components.LocalGlassContent
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
@@ -146,7 +145,6 @@ fun ServerListScreen(
     // Cards glide to their new place as measurements come in instead of jumping.
     val reorder =
         spring<IntOffset>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-    val listContent = LocalGlassContent.current
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHost) },
@@ -154,7 +152,6 @@ fun ServerListScreen(
             GlassTopBar(
                 title = stringResource(R.string.server_list_title),
                 onBack = if (showBack) onBack else null,
-                over = listContent,
             )
         },
     ) { padding ->

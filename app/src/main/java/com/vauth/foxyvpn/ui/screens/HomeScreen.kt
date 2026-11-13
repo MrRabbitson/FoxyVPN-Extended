@@ -1,6 +1,5 @@
 package com.vauth.foxyvpn.ui.screens
 
-import com.vauth.foxyvpn.ui.components.LocalGlassContent
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
@@ -157,7 +156,6 @@ fun HomeScreen(
     val isConnected = state == ConnectionState.CONNECTED
     val secondary = MaterialTheme.colorScheme.onSurfaceVariant
 
-    val content = LocalGlassContent.current
     val reveal = LocalThemeReveal.current
     val rootView = LocalView.current
     var themeButtonCenter by remember { mutableStateOf(Offset.Zero) }
@@ -446,7 +444,6 @@ fun HomeScreen(
         GlassTopBar(
             title = stringResource(R.string.app_name),
             onBack = null,
-            over = content,
             modifier = Modifier.widthIn(max = 520.dp),
             leading = {
                 FoxMascot(mood = FoxMood.GUARDING, modifier = Modifier.size(26.dp), animated = false)
