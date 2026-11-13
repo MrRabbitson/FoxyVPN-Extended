@@ -2,7 +2,6 @@ package com.vauth.foxyvpn.ui.components
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -24,10 +23,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,7 +50,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -61,13 +57,11 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.vauth.foxyvpn.R
 import com.vauth.foxyvpn.data.model.ConnectionState
 import com.vauth.foxyvpn.ui.theme.FoxAmber
 import com.vauth.foxyvpn.ui.theme.FoxMagenta
 import com.vauth.foxyvpn.ui.theme.FoxOrange
 import com.vauth.foxyvpn.ui.theme.FoxRed
-import com.vauth.foxyvpn.ui.theme.LocalFoxyStatusColors
 import com.vauth.foxyvpn.ui.theme.firefoxSweepBrush
 import kotlin.math.floor
 import kotlin.math.max
@@ -157,18 +151,6 @@ fun FoxConnectButton(
     }
 
     val track = MaterialTheme.colorScheme.outlineVariant
-    val statusColors = LocalFoxyStatusColors.current
-    val badge by
-        animateColorAsState(
-            targetValue =
-                when (state) {
-                    ConnectionState.CONNECTED -> statusColors.connected
-                    ConnectionState.CONNECTING -> FoxAmber
-                    ConnectionState.DISCONNECTED -> MaterialTheme.colorScheme.outline
-                },
-            animationSpec = tween(400),
-            label = "badge-color",
-        )
     val flame = remember { firefoxSweepBrush() }
 
     Box(
@@ -250,20 +232,6 @@ fun FoxConnectButton(
             FoxMascot(
                 mood = state.toFoxMood(),
                 modifier = Modifier.align(Alignment.Center).size(size * 0.47f).offset(y = 2.dp),
-            )
-        }
-
-        GlassSurface(
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = size * 0.08f).size(size * 0.17f),
-            shape = CircleShape,
-            rim = GlassRim.Vertical,
-            tint = badge.copy(alpha = 0.78f),
-        ) {
-            Icon(
-                painterResource(R.drawable.lucide_power),
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.align(Alignment.Center).size(size * 0.09f),
             )
         }
     }

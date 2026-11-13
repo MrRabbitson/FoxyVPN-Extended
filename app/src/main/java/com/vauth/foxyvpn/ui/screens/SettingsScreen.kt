@@ -95,6 +95,7 @@ fun SettingsScreen(
     onOpenLogs: () -> Unit,
     onSignOut: () -> Unit,
     onBack: () -> Unit,
+    showBack: Boolean = true,
     isSignedIn: Boolean = true,
     signOutInProgress: Boolean = false,
     onCheckForUpdates: (() -> Unit)? = null,
@@ -349,7 +350,7 @@ fun SettingsScreen(
         topBar = {
             GlassTopBar(
                 title = stringResource(R.string.settings_title),
-                onBack = onBack,
+                onBack = if (showBack) onBack else null,
                 over = listContent,
             )
         }
@@ -359,7 +360,7 @@ fun SettingsScreen(
                 .glassSource(listContent)
                 .verticalScroll(rememberScrollState())
                 .padding(padding)
-                .padding(bottom = 24.dp)
+                .padding(bottom = 120.dp)
         ) {
             SectionLabel(stringResource(R.string.settings_section_appearance))
             GlassGroup {
@@ -879,9 +880,9 @@ private fun SettingsToggle(
 @Composable
 private fun SectionLabel(text: String) {
     Text(
-        text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
+        text.uppercase(),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(start = 28.dp, end = 28.dp, top = 20.dp, bottom = 8.dp),
     )
 }

@@ -292,4 +292,8 @@
     <string name="session_changed_sign_out">Session changed. Try signing out again.</string>
     <string name="update_network_error">network error</string>
     <string name="home_connected_to">Connected to: %1$s</string>
+    <string name="tab_home">Home</string>
+    <string name="tab_locations">Locations</string>
+    <string name="home_protection">Protection</string>
+    <string name="home_quota_of">%1$s of %2$s</string>
 </resources>

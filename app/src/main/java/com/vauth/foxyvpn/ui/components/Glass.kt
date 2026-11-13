@@ -1,5 +1,11 @@
 package com.vauth.foxyvpn.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -16,7 +22,6 @@ import androidx.compose.ui.graphics.Canvas as ComposeCanvas
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.toSize
-import com.vauth.foxyvpn.ui.theme.FoxAmber
 import android.os.Build
 import android.view.WindowManager
 import androidx.compose.animation.core.animateFloatAsState
@@ -94,9 +99,7 @@ import androidx.compose.ui.window.DialogWindowProvider
 import com.vauth.foxyvpn.R
 import com.vauth.foxyvpn.ui.theme.FoxMagenta
 import com.vauth.foxyvpn.ui.theme.FoxOrange
-import com.vauth.foxyvpn.ui.theme.FoxRed
 import com.vauth.foxyvpn.ui.theme.FoxViolet
-import com.vauth.foxyvpn.ui.theme.FoxYellow
 
 /** Real backdrop blur needs RenderEffect, which exists from Android 12. */
 private val BlurSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -297,11 +300,125 @@ fun GlassSurface(
     )
 }
 
-/** A group of rows on one pane, as used for settings sections. */
+/**
+ * A card for content: grouped rows, lists. Deliberately not glass. Glass is
+ * kept for controls that float above content; the content itself sits on a
+ * quiet, even surface so it stays easy to read.
+ */
+@Composable
+fun SectionCard(
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val dark = isDarkGlass()
+    val shape = RoundedCornerShape(22.dp)
+    Box(
+        modifier =
+            modifier
+                .clip(shape)
+                .background(if (dark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.92f))
+                .border(
+                    1.dp,
+                    if (dark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.04f),
+                    shape,
+                )
+                .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier),
+        content = content,
+    )
+}
+
+/** Hairline between rows of a [SectionCard], inset like the row text. */
+@Composable
+fun RowDivider(modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp)
+            .height(1.dp)
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f))
+    )
+}
+
+/** A group of rows on one card, as used for settings sections. */
 @Composable
 fun GlassGroup(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    GlassSurface(modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+    SectionCard(modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
         Column(Modifier.padding(vertical = 4.dp), content = content)
+    }
+}
+
+class GlassTab(val key: String, val icon: Int, val label: String)
+
+/**
+ * Floating tab bar. The selected tab sits in a lighter capsule that slides
+ * between tabs; [over] is the content scrolling underneath.
+ */
+@Composable
+fun GlassTabBar(
+    tabs: List<GlassTab>,
+    selected: String?,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    over: GlassSource? = null,
+) {
+    val index = tabs.indexOfFirst { it.key == selected }.coerceAtLeast(0)
+    val slide by
+        animateFloatAsState(
+            targetValue = index.toFloat(),
+            animationSpec = spring(dampingRatio = 0.78f, stiffness = 380f),
+            label = "tab-capsule",
+        )
+    val capsule = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+    GlassSurface(
+        modifier = modifier.height(64.dp).widthIn(max = 360.dp).fillMaxWidth(),
+        shape = RoundedCornerShape(32.dp),
+        rim = GlassRim.Vertical,
+        over = over,
+    ) {
+        Row(
+            Modifier.fillMaxSize()
+                .padding(5.dp)
+                .drawBehind {
+                    val slot = size.width / tabs.size
+                    drawRoundRect(
+                        color = capsule,
+                        topLeft = Offset(slot * slide, 0f),
+                        size = Size(slot, size.height),
+                        cornerRadius = CornerRadius(size.height / 2f),
+                    )
+                }
+        ) {
+            for (tab in tabs) {
+                val active = tab.key == selected
+                val tint by
+                    animateColorAsState(
+                        targetValue =
+                            if (active) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        animationSpec = tween(220),
+                        label = "tab-tint",
+                    )
+                Column(
+                    modifier =
+                        Modifier.weight(1f)
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(27.dp))
+                            .selectable(
+                                selected = active,
+                                role = Role.Tab,
+                                interactionSource = null,
+                                indication = null,
+                                onClick = { onSelect(tab.key) },
+                            ),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(painterResource(tab.icon), contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+                    Text(tab.label, style = MaterialTheme.typography.labelSmall, color = tint, maxLines = 1)
+                }
+            }
+        }
     }
 }
 
@@ -520,20 +637,19 @@ private class Disc(
 /** Positions are fractions of the screen; radii are fractions of its width. */
 private val Discs =
     listOf(
-        Disc(FoxViolet, 0.04f, 0.80f, 0.36f, warm = false, weight = 1f),
-        Disc(FoxRed, 0.94f, 0.97f, 0.30f, warm = false, weight = 0.9f),
-        Disc(FoxMagenta, 0.80f, 0.68f, 0.21f, warm = true, weight = 0.85f),
-        Disc(FoxOrange, 0.50f, 0.22f, 0.34f, warm = true, weight = 1f),
-        Disc(FoxYellow, 0.10f, 0.07f, 0.20f, warm = true, weight = 0.9f),
-        Disc(FoxAmber, 0.28f, 0.60f, 0.15f, warm = true, weight = 0.8f),
-        Disc(FoxYellow, 0.62f, 0.90f, 0.11f, warm = true, weight = 0.7f),
+        Disc(FoxOrange, 0.50f, 0.20f, 0.95f, warm = true, weight = 1f),
+        Disc(FoxMagenta, 1.05f, 0.02f, 0.70f, warm = true, weight = 0.45f),
+        Disc(FoxViolet, -0.05f, 0.55f, 0.80f, warm = false, weight = 1f),
     )
 
-/** Paints the backdrop: crisp discs of flame colour on the theme background. */
+/**
+ * Paints the backdrop: the theme background with a soft glow behind the top of
+ * the screen. Quiet on purpose; the interface, not the wallpaper, is the subject.
+ */
 private fun DrawScope.drawFlameField(glow: Float, dark: Boolean, base: Color) {
     drawRect(base)
-    val warm = (if (dark) 0.80f else 0.62f) * (0.55f + 0.45f * glow)
-    val cool = if (dark) 0.62f else 0.42f
+    val warm = (if (dark) 0.30f else 0.22f) * (0.30f + 0.70f * glow)
+    val cool = if (dark) 0.10f else 0.06f
     for (disc in Discs) {
         val strength = (if (disc.warm) warm else cool) * disc.weight
         val at = Offset(size.width * disc.x, size.height * disc.y)
@@ -542,7 +658,7 @@ private fun DrawScope.drawFlameField(glow: Float, dark: Boolean, base: Color) {
             brush =
                 Brush.radialGradient(
                     0f to disc.color.copy(alpha = strength),
-                    0.95f to disc.color.copy(alpha = strength * 0.9f),
+                    0.5f to disc.color.copy(alpha = strength * 0.42f),
                     1f to disc.color.copy(alpha = 0f),
                     center = at,
                     radius = radius,

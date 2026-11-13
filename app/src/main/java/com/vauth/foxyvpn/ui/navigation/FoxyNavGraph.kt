@@ -1,5 +1,21 @@
 package com.vauth.foxyvpn.ui.navigation
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.navigation.compose.currentBackStackEntryAsState
+import com.vauth.foxyvpn.R
+import com.vauth.foxyvpn.ui.components.GlassTab
+import com.vauth.foxyvpn.ui.components.GlassTabBar
+import com.vauth.foxyvpn.ui.components.glassSource
+import com.vauth.foxyvpn.ui.components.rememberGlassSource
 import android.net.ConnectivityManager
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -39,6 +55,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private val TabRoutes = setOf("home", "servers", "settings")
+
 object FoxyRoutes {
     const val SPLASH = "splash"
     const val LOGIN = "login"
@@ -63,6 +81,26 @@ fun FoxyNavGraph(
     // Shared-axis motion: screens slide a short distance and cross-fade, with
     // the outgoing one gone before the incoming one is fully opaque.
     val shift = with(LocalDensity.current) { 30.dp.roundToPx() }
+    val entry by navController.currentBackStackEntryAsState()
+    val route = entry?.destination?.route
+    // Tabs exist once the user is past sign-in, i.e. Home is on the stack.
+    val tabbed =
+        remember(entry) {
+            route in TabRoutes && runCatching { navController.getBackStackEntry(FoxyRoutes.HOME) }.isSuccess
+        }
+    fun openTab(target: String) {
+        if (target == FoxyRoutes.HOME) {
+            navController.popBackStack(FoxyRoutes.HOME, inclusive = false)
+        } else {
+            navController.navigate(target) {
+                popUpTo(FoxyRoutes.HOME)
+                launchSingleTop = true
+            }
+        }
+    }
+    val screens = rememberGlassSource()
+    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().glassSource(screens)) {
     NavHost(
         navController = navController,
         startDestination = FoxyRoutes.SPLASH,
@@ -125,8 +163,7 @@ fun FoxyNavGraph(
                 themeController = themeController,
                 onRequestConnect = onRequestConnect,
                 onDisconnect = onDisconnect,
-                onOpenServers = { navController.navigate(FoxyRoutes.SERVERS) },
-                onOpenSettings = { navController.navigate(FoxyRoutes.SETTINGS) },
+                onOpenServers = { openTab(FoxyRoutes.SERVERS) },
             )
         }
         composable(FoxyRoutes.SERVERS) {
@@ -136,7 +173,7 @@ fun FoxyNavGraph(
                         ServerListViewModel.factory(
                             serverListClient = container.serverListClient,
                             proxyStateStore = container.proxyStateStore,
-                            loadFailedMessage = context.getString(com.vauth.foxyvpn.R.string.server_list_load_failed),
+                            loadFailedMessage = context.getString(R.string.server_list_load_failed),
                         )
                 )
             GlassScreen {
@@ -154,6 +191,7 @@ fun FoxyNavGraph(
                     }
                 },
                 onBack = { navController.popBackStack() },
+                showBack = !tabbed,
             )
             }
         }
@@ -189,7 +227,7 @@ fun FoxyNavGraph(
                         try {
                             withContext(Dispatchers.IO) {
                                 check(container.tokenStore.clearIfCurrent(epoch)) {
-                                    context.getString(com.vauth.foxyvpn.R.string.session_changed_sign_out)
+                                    context.getString(R.string.session_changed_sign_out)
                                 }
                                 com.vauth.foxyvpn.data.ControlPlaneHttp.cookieJar.clear()
                                 container.settingsStore.clearAccountSession()
@@ -204,7 +242,7 @@ fun FoxyNavGraph(
                         } catch (error: Exception) {
                             android.widget.Toast.makeText(
                                 context,
-                                error.message ?: context.getString(com.vauth.foxyvpn.R.string.session_clear_failed),
+                                error.message ?: context.getString(R.string.session_clear_failed),
                                 android.widget.Toast.LENGTH_LONG,
                             ).show()
                         } finally {
@@ -213,9 +251,31 @@ fun FoxyNavGraph(
                     }
                 },
                 onBack = { navController.popBackStack() },
+                showBack = !tabbed,
             )
             }
         }
         composable(FoxyRoutes.LOGS) { GlassScreen { LogsScreen(onBack = { navController.popBackStack() }) } }
+    }
+    }
+        AnimatedVisibility(
+            visible = tabbed,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = fadeIn(tween(200)) + slideInVertically(tween(320, easing = EmphasizedEasing)) { it },
+            exit = fadeOut(tween(120)) + slideOutVertically(tween(220)) { it },
+        ) {
+            GlassTabBar(
+                tabs =
+                    listOf(
+                        GlassTab(FoxyRoutes.HOME, R.drawable.lucide_house, stringResource(R.string.tab_home)),
+                        GlassTab(FoxyRoutes.SERVERS, R.drawable.lucide_map_pin, stringResource(R.string.tab_locations)),
+                        GlassTab(FoxyRoutes.SETTINGS, R.drawable.lucide_settings, stringResource(R.string.settings_title)),
+                    ),
+                selected = route,
+                onSelect = ::openTab,
+                modifier = Modifier.navigationBarsPadding().padding(start = 24.dp, end = 24.dp, bottom = 14.dp),
+                over = screens,
+            )
+        }
     }
 }
