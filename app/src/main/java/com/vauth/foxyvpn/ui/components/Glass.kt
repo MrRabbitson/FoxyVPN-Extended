@@ -1,5 +1,11 @@
 package com.vauth.foxyvpn.ui.components
 
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.unit.toSize
+import com.vauth.foxyvpn.ui.theme.FoxAmber
 import android.os.Build
 import android.view.WindowManager
 import androidx.compose.animation.core.animateFloatAsState
@@ -117,8 +123,20 @@ fun Modifier.glassSource(source: GlassSource): Modifier =
             source.markDrawn()
         }
 
-/** The colour backdrop shared by every screen; null inside dialogs. */
-val LocalGlassBackdrop = staticCompositionLocalOf<GlassSource?> { null }
+/**
+ * The colour backdrop shared by every screen. Panes read it to paint the part
+ * of the backdrop that lies behind them in its out-of-focus form.
+ */
+class GlassBackdrop {
+    internal var origin by mutableStateOf(Offset.Zero)
+    internal var area by mutableStateOf(Size.Zero)
+    internal var dark by mutableStateOf(true)
+    internal var base by mutableStateOf(Color.Black)
+    internal var glow: State<Float> = mutableFloatStateOf(1f)
+}
+
+/** Null inside dialogs, which live in their own window. */
+val LocalGlassBackdrop = staticCompositionLocalOf<GlassBackdrop?> { null }
 
 enum class GlassRim {
     /** Light catches opposite corners. For large panes. */
@@ -149,9 +167,6 @@ fun GlassSurface(
 ) {
     val dark = isDarkGlass()
     val backdrop = LocalGlassBackdrop.current
-    val behind = if (BlurSupported) backdrop else null
-    // Without blur the pane must hide the detail behind it some other way.
-    val solid = !BlurSupported && backdrop != null
 
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -164,7 +179,7 @@ fun GlassSurface(
 
     val blurRadius = with(LocalDensity.current) { 22.dp.toPx() }
     val pane = rememberGraphicsLayer()
-    if (behind != null) {
+    if (BlurSupported && over != null) {
         remember(pane, blurRadius) {
             pane.renderEffect = BlurEffect(blurRadius, blurRadius, TileMode.Clamp)
             true
@@ -172,15 +187,10 @@ fun GlassSurface(
     }
     var position by remember { mutableStateOf(Offset.Zero) }
 
-    val scrim =
-        when {
-            solid -> MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.94f)
-            dark -> Color.Black.copy(alpha = 0.16f)
-            else -> Color.White.copy(alpha = 0.22f)
-        }
-    val bodyTop = Color.White.copy(alpha = if (dark) 0.11f else 0.46f)
-    val bodyBottom = Color.White.copy(alpha = if (dark) 0.03f else 0.24f)
-    val sheenTop = Color.White.copy(alpha = if (dark) 0.08f else 0.26f)
+    val scrim = if (dark) Color.Black.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.10f)
+    val bodyTop = Color.White.copy(alpha = if (dark) 0.08f else 0.30f)
+    val bodyBottom = Color.White.copy(alpha = if (dark) 0.02f else 0.12f)
+    val sheenTop = Color.White.copy(alpha = if (dark) 0.07f else 0.22f)
     val rimBright = Color.White.copy(alpha = if (dark) 0.50f else 0.95f)
     val rimDim = Color.White.copy(alpha = if (dark) 0.06f else 0.35f)
 
@@ -225,23 +235,28 @@ fun GlassSurface(
                     // Half of the stroke is clipped away, leaving a 1dp inner rim.
                     val edgeStroke = Stroke(width = 2.dp.toPx())
                     onDrawWithContent {
-                        if (behind != null) {
-                            // Reading the frame counters redraws the pane whenever
-                            // what is behind it was redrawn.
-                            behind.observe()
-                            over?.observe()
+                        if (backdrop != null) {
                             val at = position
-                            pane.record {
-                                translate(behind.origin.x - at.x, behind.origin.y - at.y) {
-                                    drawLayer(behind.layer)
-                                }
-                                if (over != null) {
+                            // The backdrop as seen through the glass: same colours, out of focus.
+                            translate(backdrop.origin.x - at.x, backdrop.origin.y - at.y) {
+                                drawFlameField(
+                                    area = backdrop.area,
+                                    glow = backdrop.glow.value,
+                                    dark = backdrop.dark,
+                                    base = backdrop.base,
+                                    soft = true,
+                                )
+                            }
+                            // Content scrolling under the pane is blurred live.
+                            if (over != null && BlurSupported) {
+                                over.observe()
+                                pane.record {
                                     translate(over.origin.x - at.x, over.origin.y - at.y) {
                                         drawLayer(over.layer)
                                     }
                                 }
+                                drawLayer(pane)
                             }
-                            drawLayer(pane)
                         }
                         drawOutline(outline, scrim)
                         if (tint.isSpecified) drawOutline(outline, tint)
@@ -480,50 +495,87 @@ private fun BlurBehindDialog() {
     }
 }
 
+private class Disc(
+    val color: Color,
+    val x: Float,
+    val y: Float,
+    val radius: Float,
+    val warm: Boolean,
+    val weight: Float,
+)
+
+/** Positions are fractions of the screen; radii are fractions of its width. */
+private val Discs =
+    listOf(
+        Disc(FoxViolet, 0.04f, 0.80f, 0.36f, warm = false, weight = 1f),
+        Disc(FoxRed, 0.94f, 0.97f, 0.30f, warm = false, weight = 0.9f),
+        Disc(FoxMagenta, 0.80f, 0.68f, 0.21f, warm = true, weight = 0.85f),
+        Disc(FoxOrange, 0.50f, 0.22f, 0.34f, warm = true, weight = 1f),
+        Disc(FoxYellow, 0.10f, 0.07f, 0.20f, warm = true, weight = 0.9f),
+        Disc(FoxAmber, 0.28f, 0.60f, 0.15f, warm = true, weight = 0.8f),
+        Disc(FoxYellow, 0.62f, 0.90f, 0.11f, warm = true, weight = 0.7f),
+    )
+
 /**
- * The backdrop every screen sits on: a few still discs of flame colour. They
- * have real edges on purpose, so the blur under the glass is visible. Nothing
- * moves on its own; the warm discs brighten or dim with [intensity].
+ * Paints the backdrop. In focus the discs have crisp edges; [soft] paints the
+ * same discs the way they look through frosted glass: spread out and diffuse.
+ */
+private fun DrawScope.drawFlameField(area: Size, glow: Float, dark: Boolean, base: Color, soft: Boolean) {
+    if (area.width <= 0f || area.height <= 0f) return
+    drawRect(base, size = area)
+    val warm = (if (dark) 0.80f else 0.62f) * (0.55f + 0.45f * glow)
+    val cool = if (dark) 0.62f else 0.42f
+    for (disc in Discs) {
+        val strength = (if (disc.warm) warm else cool) * disc.weight
+        val at = Offset(area.width * disc.x, area.height * disc.y)
+        val radius = area.width * disc.radius * (if (soft) 1.5f else 1f)
+        val brush =
+            if (soft) {
+                Brush.radialGradient(
+                    0f to disc.color.copy(alpha = strength * 0.78f),
+                    0.45f to disc.color.copy(alpha = strength * 0.46f),
+                    1f to disc.color.copy(alpha = 0f),
+                    center = at,
+                    radius = radius,
+                )
+            } else {
+                Brush.radialGradient(
+                    0f to disc.color.copy(alpha = strength),
+                    0.95f to disc.color.copy(alpha = strength * 0.9f),
+                    1f to disc.color.copy(alpha = 0f),
+                    center = at,
+                    radius = radius,
+                )
+            }
+        drawCircle(brush, radius = radius, center = at)
+    }
+}
+
+/**
+ * The backdrop every screen sits on: still discs of flame colour with crisp
+ * edges, so it is obvious what the glass above them does. Nothing moves on its
+ * own; the warm discs brighten or dim with [intensity].
  */
 @Composable
-fun FlameBackdrop(modifier: Modifier = Modifier, intensity: Float = 1f) {
-    val dark = MaterialTheme.colorScheme.background.luma() < 0.3f
-    val glow by
+fun FlameBackdrop(state: GlassBackdrop, modifier: Modifier = Modifier, intensity: Float = 1f) {
+    val base = MaterialTheme.colorScheme.background
+    val dark = base.luma() < 0.3f
+    val glow =
         animateFloatAsState(
             targetValue = intensity,
             animationSpec = tween(1_400, easing = EmphasizedEasing),
             label = "backdrop-glow",
         )
-    val base = MaterialTheme.colorScheme.background
-    Canvas(modifier) {
-        val w = size.width
-        val h = size.height
-        // Opaque, so a blurred copy of this layer fully hides the sharp one beneath it.
-        drawRect(base)
-        val warm = (if (dark) 0.62f else 0.50f) * (0.40f + 0.60f * glow)
-        val cool = if (dark) 0.50f else 0.30f
-        fun disc(color: Color, x: Float, y: Float, radius: Float, strength: Float) {
-            val at = Offset(w * x, h * y)
-            val r = w * radius
-            drawCircle(
-                brush =
-                    Brush.radialGradient(
-                        0f to color.copy(alpha = strength),
-                        0.62f to color.copy(alpha = strength * 0.85f),
-                        0.90f to color.copy(alpha = strength * 0.30f),
-                        1f to color.copy(alpha = 0f),
-                        center = at,
-                        radius = r,
-                    ),
-                radius = r,
-                center = at,
-            )
+    state.glow = glow
+    state.dark = dark
+    state.base = base
+    Canvas(
+        modifier.onGloballyPositioned {
+            state.origin = it.positionInRoot()
+            state.area = it.size.toSize()
         }
-        disc(FoxViolet, 0.02f, 0.72f, 0.42f, cool)
-        disc(FoxRed, 0.90f, 0.95f, 0.36f, cool * 0.8f)
-        disc(FoxMagenta, 0.98f, 0.46f, 0.34f, warm * 0.75f)
-        disc(FoxOrange, 0.50f, 0.25f, 0.46f, warm)
-        disc(FoxYellow, 0.10f, 0.08f, 0.24f, warm * 0.85f)
+    ) {
+        drawFlameField(area = size, glow = glow.value, dark = dark, base = base, soft = false)
     }
 }
 

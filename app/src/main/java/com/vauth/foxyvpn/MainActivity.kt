@@ -6,8 +6,8 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vauth.foxyvpn.ui.components.FlameBackdrop
 import com.vauth.foxyvpn.ui.components.LocalGlassBackdrop
-import com.vauth.foxyvpn.ui.components.glassSource
-import com.vauth.foxyvpn.ui.components.rememberGlassSource
+import androidx.compose.runtime.remember
+import com.vauth.foxyvpn.ui.components.GlassBackdrop
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -116,16 +116,17 @@ class MainActivity : ComponentActivity() {
             val themeController = rememberThemeController(app.settingsStore)
             FoxyVpnTheme(themeMode = themeController.mode) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    val backdrop = rememberGlassSource()
+                    val backdrop = remember { GlassBackdrop() }
                     val vpnState by FoxyVpnService.state.collectAsStateWithLifecycle()
                     Box(Modifier.fillMaxSize()) {
                         FlameBackdrop(
-                            modifier = Modifier.fillMaxSize().glassSource(backdrop),
+                            state = backdrop,
+                            modifier = Modifier.fillMaxSize(),
                             intensity =
                                 when (vpnState) {
                                     ConnectionState.CONNECTED -> 1f
-                                    ConnectionState.CONNECTING -> 0.7f
-                                    ConnectionState.DISCONNECTED -> 0.35f
+                                    ConnectionState.CONNECTING -> 0.6f
+                                    ConnectionState.DISCONNECTED -> 0.2f
                                 },
                         )
                         CompositionLocalProvider(LocalGlassBackdrop provides backdrop) {

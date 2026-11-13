@@ -45,8 +45,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -164,15 +162,28 @@ fun HomeScreen(
 
         Scaffold(
             containerColor = Color.Transparent,
-            topBar = {
-                TopAppBar(
-                    colors =
-                        TopAppBarDefaults.topAppBarColors(
-                            containerColor = Color.Transparent,
-                            scrolledContainerColor = Color.Transparent,
-                        ),
-                    title = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+        ) { padding ->
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.TopCenter,
+            ) {
+                val scrollState = rememberScrollState()
+                val naturalContentHeight = 710.dp
+                val availableExtra = (maxHeight - naturalContentHeight).coerceAtLeast(0.dp)
+                val dynamicSpace = if (availableExtra > 0.dp) (availableExtra / 2) else 8.dp
+
+                Column(
+                    modifier =
+                        Modifier.widthIn(max = 520.dp)
+                            .fillMaxWidth()
+                            .verticalScroll(scrollState, enabled = scrollState.maxValue > 0)
+                            .padding(horizontal = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                             FoxMascot(
                                 mood = FoxMood.GUARDING,
                                 modifier = Modifier.size(30.dp),
@@ -183,9 +194,7 @@ fun HomeScreen(
                                 stringResource(R.string.app_name),
                                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
                             )
-                        }
-                    },
-                    actions = {
+                                                Spacer(Modifier.weight(1f))
                         val mode = themeController.mode
                         val showingDark = themeController.resolveDark(systemInDarkTheme)
                         GlassSurface(modifier = Modifier.size(44.dp), shape = CircleShape, rim = GlassRim.Vertical) {
@@ -235,34 +244,15 @@ Box(
                         }
 }
                         Spacer(Modifier.width(8.dp))
-                        GlassIconButton(onClick = onOpenSettings, modifier = Modifier.padding(end = 8.dp)) {
+                        GlassIconButton(onClick = onOpenSettings) {
                             Icon(
                                 painter = painterResource(R.drawable.lucide_settings),
                                 contentDescription = stringResource(R.string.settings_title),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                    },
-                )
-            },
-        ) { padding ->
-            BoxWithConstraints(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentAlignment = Alignment.TopCenter,
-            ) {
-                val scrollState = rememberScrollState()
-                val naturalContentHeight = 640.dp
-                val availableExtra = (maxHeight - naturalContentHeight).coerceAtLeast(0.dp)
-                val dynamicSpace = if (availableExtra > 0.dp) (availableExtra / 2) else 8.dp
+                    }
 
-                Column(
-                    modifier =
-                        Modifier.widthIn(max = 520.dp)
-                            .fillMaxWidth()
-                            .verticalScroll(scrollState, enabled = scrollState.maxValue > 0)
-                            .padding(horizontal = 20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
                     Spacer(Modifier.height(dynamicSpace))
 
                     FoxConnectButton(
