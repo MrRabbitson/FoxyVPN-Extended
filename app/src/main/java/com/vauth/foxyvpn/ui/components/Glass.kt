@@ -1,5 +1,7 @@
 package com.vauth.foxyvpn.ui.components
 
+import androidx.compose.ui.graphics.layer.CompositingStrategy
+import kotlin.math.ceil
 import android.graphics.PixelFormat
 import android.media.ImageReader
 import android.os.Handler
@@ -167,12 +169,6 @@ fun Modifier.glassTouchWatch(): Modifier =
 
 /** Set if reading the picture back ever fails on this device; glass then shows the backdrop only. */
 private var captureBroken = false
-/** True while something else needs every frame (the theme reveal); no pictures are taken then. */
-private var capturePaused = false
-
-internal fun setGlassPaused(paused: Boolean) {
-    capturePaused = paused
-}
 
 /**
  * Something glass can sit on top of. The node carrying [glassSource] draws
@@ -189,8 +185,73 @@ class GlassSource
 internal constructor(
     private val backdrop: GlassBackdrop?,
     internal val layer: GraphicsLayer,
+    private val chain: List<GraphicsLayer>,
 ) {
     internal var origin by mutableStateOf(Offset.Zero)
+
+    /** Size of the source on screen; zero until it has drawn once. */
+    internal var liveArea by mutableStateOf(Size.Zero)
+        private set
+    /** Size of [soft], the blurred copy panes draw stretched over [liveArea]. */
+    internal var softSize = Size.Zero
+        private set
+    internal val soft: GraphicsLayer
+        get() = chain.last()
+
+    /** Dialogs open right now; only they need the picture below. */
+    private var pictureUsers = 0
+
+    internal fun addPictureUser(delta: Int) {
+        pictureUsers = (pictureUsers + delta).coerceAtLeast(0)
+    }
+
+    /**
+     * Blurs [layer] entirely on the GPU, in the same frame: each link of the
+     * chain is a small off-screen texture that draws the previous one scaled,
+     * first down to a few dozen pixels and then back up. The filtering done by
+     * every rescale adds up to a wide, smooth blur, and because the links are
+     * layers the result follows the content with no delay.
+     */
+    internal fun buildBlur(scope: DrawScope) {
+        val full = scope.size
+        if (full.width < 1f || full.height < 1f) return
+        val behind = backdrop
+        val at = origin
+        var previous = layer
+        var previousW = full.width
+        var previousH = full.height
+        with(scope) {
+            for (index in chain.indices) {
+                val w = max(1, ceil(full.width * BlurSteps[index]).toInt())
+                val h = max(1, ceil(full.height * BlurSteps[index]).toInt())
+                val from = previous
+                val sx = w / previousW
+                val sy = h / previousH
+                val first = index == 0
+                chain[index].record(size = IntSize(w, h)) {
+                    scale(sx, sy, pivot = Offset.Zero) {
+                        if (first) {
+                            if (behind != null && behind.area.width > 0f) {
+                                translate(behind.origin.x - at.x, behind.origin.y - at.y) {
+                                    drawFlameField(behind.area, behind.glow, behind.dark, behind.base)
+                                }
+                            } else {
+                                drawRect(Color.Black, size = full)
+                            }
+                        }
+                        drawLayer(from)
+                    }
+                }
+                previous = chain[index]
+                previousW = w.toFloat()
+                previousH = h.toFloat()
+            }
+        }
+        softSize = Size(previousW, previousH)
+        liveArea = full
+    }
+
+    /** Picture for dialogs: they live in another window and cannot draw [soft]. */
     internal var area = Size.Zero
         private set
     internal var blurred: ImageBitmap? = null
@@ -202,7 +263,6 @@ internal constructor(
     private var released = false
     /** When the picture now on show was requested. */
     private var shownRequestedAt = 0L
-    private var loggedAt = 0L
     private var pendingArea = Size.Zero
     private var reader: ImageReader? = null
     private val main = Handler(Looper.getMainLooper())
@@ -217,8 +277,6 @@ internal constructor(
     /** Subscribes the caller to new pictures of this source. */
     internal fun observe(): Int = frame
 
-    /** Whether the picture on show was requested at or after [uptimeMillis]. */
-    internal fun isFreshSince(uptimeMillis: Long): Boolean = shownRequestedAt >= uptimeMillis
 
     /** Called right after [layer] was recorded. */
     internal fun snap(scope: DrawScope) {
@@ -227,7 +285,7 @@ internal constructor(
         if (busy && now - takenAt > 1_000L) busy = false
         // One picture in flight at a time; the next is requested by the first
         // frame after it lands, so the rate is whatever the device can return.
-        if (busy || captureBroken || capturePaused || released) return
+        if (busy || captureBroken || released || pictureUsers == 0) return
         val full = scope.size
         if (full.width < 1f || full.height < 1f) return
         val scale = CAPTURE_WIDTH / full.width
@@ -313,11 +371,6 @@ internal constructor(
                 blurred = images[slot]
                 area = pendingArea
                 shownRequestedAt = takenAt
-                val now = SystemClock.uptimeMillis()
-                if (now - loggedAt > 15_000L) {
-                    loggedAt = now
-                    AppLogger.i("Glass", "picture round trip ${now - takenAt} ms")
-                }
                 busy = false
                 frame++
             }
@@ -348,11 +401,29 @@ private object ReadbackThread {
     }
 }
 
+/** Scale of each link of the blur chain relative to the source: down, then back up. */
+private val BlurSteps = floatArrayOf(1f / 4f, 1f / 16f, 1f / 48f, 1f / 16f, 1f / 4f)
+
 @Composable
 fun rememberGlassSource(): GlassSource {
     val backdrop = LocalGlassBackdrop.current
     val layer = rememberGraphicsLayer()
-    val source = remember(backdrop, layer) { GlassSource(backdrop, layer) }
+    val chain =
+        listOf(
+            rememberGraphicsLayer(),
+            rememberGraphicsLayer(),
+            rememberGraphicsLayer(),
+            rememberGraphicsLayer(),
+            rememberGraphicsLayer(),
+        )
+    val source =
+        remember(backdrop, layer) {
+            // Off-screen: each link is rasterised at its own small size, which is
+            // what turns the rescaling into a blur.
+            chain.forEach { it.compositingStrategy = CompositingStrategy.Offscreen }
+            chain.last().colorFilter = Vivid
+            GlassSource(backdrop, layer, chain)
+        }
     DisposableEffect(source) { onDispose { source.release() } }
     return source
 }
@@ -363,6 +434,7 @@ fun Modifier.glassSource(source: GlassSource): Modifier =
             GlassClock.observe()
             source.layer.record { this@drawWithContent.drawContent() }
             drawLayer(source.layer)
+            source.buildBlur(this)
             source.snap(this)
         }
 
@@ -481,17 +553,13 @@ fun GlassSurface(
                             val at = position
                             // What is behind this pane, blurred: the content it floats
                             // over if there is any, otherwise the backdrop.
-                            over?.observe()
-                            val picture = over?.blurred
-                            if (over != null && picture != null) {
-                                val area = over.area
+                            val live = over?.liveArea ?: Size.Zero
+                            if (over != null && live.width > 0f) {
+                                val small = over.softSize
                                 translate(over.origin.x - at.x, over.origin.y - at.y) {
-                                    drawImage(
-                                        image = picture,
-                                        dstSize = IntSize(area.width.roundToInt(), area.height.roundToInt()),
-                                        colorFilter = Vivid,
-                                        filterQuality = FilterQuality.Low,
-                                    )
+                                    scale(live.width / small.width, live.height / small.height, pivot = Offset.Zero) {
+                                        drawLayer(over.soft)
+                                    }
                                 }
                             } else {
                                 val image = backdrop.blurred
@@ -842,6 +910,11 @@ fun GlassAlertDialog(
     val shape = RoundedCornerShape(28.dp)
 
     // Panes inside the dialog cannot sample the app's backdrop either.
+    DisposableEffect(screen) {
+        screen?.addPictureUser(1)
+        GlassClock.keepLive(300L)
+        onDispose { screen?.addPictureUser(-1) }
+    }
     CompositionLocalProvider(LocalGlassBackdrop provides null) {
         var onScreen by remember { mutableStateOf(Offset.Zero) }
         AlertDialog(

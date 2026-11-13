@@ -91,27 +91,15 @@ val LocalThemeReveal = staticCompositionLocalOf<ThemeReveal?> { null }
 fun ThemeRevealOverlay(reveal: ThemeReveal) {
     val photo = reveal.snapshot ?: return
     val progress = androidx.compose.runtime.remember(photo) { Animatable(0f) }
-    val screen = LocalGlassContent.current
     LaunchedEffect(photo) {
         try {
             // Let the new theme compose and draw underneath before uncovering it,
-            // and wait for the glass to pick it up, so neither lands mid-animation.
-            GlassClock.keepLive(600L)
+            // so that work does not land in the middle of the animation. The
+            // glass needs no special care: it follows the content frame by frame.
             repeat(2) { withFrameNanos {} }
-            if (screen != null) {
-                // A picture asked for from now on is guaranteed to be of the new theme.
-                val themed = SystemClock.uptimeMillis()
-                withTimeoutOrNull(500L) { while (!screen.isFreshSince(themed)) withFrameNanos {} }
-                // One more frame so the bars have drawn it.
-                withFrameNanos {}
-            }
-            // Nothing but the circle runs from here on.
-            setGlassPaused(true)
             progress.animateTo(1f, tween(460, easing = EmphasizedEasing))
         } finally {
-            setGlassPaused(false)
             reveal.finish()
-            GlassClock.keepLive(300L)
         }
     }
     Canvas(Modifier.fillMaxSize()) {

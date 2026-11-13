@@ -1,5 +1,7 @@
 package com.vauth.foxyvpn
 
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.runtime.LaunchedEffect
 import com.vauth.foxyvpn.ui.components.GlassClock
 import com.vauth.foxyvpn.ui.components.LocalThemeReveal
@@ -124,7 +126,10 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val backdrop = remember { GlassBackdrop() }
                     val reveal = remember { ThemeReveal() }
-                    LaunchedEffect(Unit) { GlassClock.run() }
+                    // The glass clock only runs while the app is actually on screen.
+                    LaunchedEffect(Unit) {
+                        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { GlassClock.run() }
+                    }
                     val vpnState by FoxyVpnService.state.collectAsStateWithLifecycle()
                     Box(Modifier.fillMaxSize().glassTouchWatch()) {
                         FlameBackdrop(

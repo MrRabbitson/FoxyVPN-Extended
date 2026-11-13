@@ -1,5 +1,8 @@
 package com.vauth.foxyvpn.ui.screens
 
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
@@ -140,13 +143,18 @@ fun HomeScreen(
         }
     }
 
+    val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(state, connectedAtElapsedMs) {
         val startEpoch = connectedAtElapsedMs
         if (state == ConnectionState.CONNECTED && startEpoch != null) {
-            while (isActive) {
-                val now = android.os.SystemClock.elapsedRealtime()
-                elapsedSeconds = ((now - startEpoch) / 1000L).coerceAtLeast(0L)
-                delay(1000L)
+            // The clock is only counted while the screen is visible; it is derived
+            // from the connection time, so nothing is lost while it is not.
+            lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (isActive) {
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    elapsedSeconds = ((now - startEpoch) / 1000L).coerceAtLeast(0L)
+                    delay(1000L)
+                }
             }
         } else {
             elapsedSeconds = 0L
