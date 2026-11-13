@@ -1,5 +1,6 @@
 package com.vauth.foxyvpn.ui.screens
 
+import com.vauth.foxyvpn.ui.components.LocalGlassContent
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
@@ -14,8 +15,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import com.vauth.foxyvpn.ui.components.GlassTopBar
-import com.vauth.foxyvpn.ui.components.glassSource
-import com.vauth.foxyvpn.ui.components.rememberGlassSource
 import com.vauth.foxyvpn.ui.components.GlassTextButton
 import androidx.compose.ui.res.painterResource
 import androidx.compose.animation.animateColorAsState
@@ -147,7 +146,7 @@ fun ServerListScreen(
     // Cards glide to their new place as measurements come in instead of jumping.
     val reorder =
         spring<IntOffset>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-    val listContent = rememberGlassSource()
+    val listContent = LocalGlassContent.current
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHost) },
@@ -179,7 +178,7 @@ fun ServerListScreen(
                     }
                 else ->
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize().glassSource(listContent).selectableGroup(),
+                        modifier = Modifier.fillMaxSize().selectableGroup(),
                         contentPadding =
                             PaddingValues(
                                 start = 12.dp,

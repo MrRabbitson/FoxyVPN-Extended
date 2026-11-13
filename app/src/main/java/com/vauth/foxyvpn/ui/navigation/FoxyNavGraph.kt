@@ -1,5 +1,7 @@
 package com.vauth.foxyvpn.ui.navigation
 
+import androidx.compose.runtime.CompositionLocalProvider
+import com.vauth.foxyvpn.ui.components.LocalGlassContent
 import androidx.compose.runtime.LaunchedEffect
 import com.vauth.foxyvpn.ui.components.GlassClock
 import androidx.compose.animation.AnimatedVisibility
@@ -104,6 +106,7 @@ fun FoxyNavGraph(
     LaunchedEffect(route) { GlassClock.keepLive(900L) }
     Box(Modifier.fillMaxSize()) {
     Box(Modifier.fillMaxSize().glassSource(screens)) {
+    CompositionLocalProvider(LocalGlassContent provides screens) {
     NavHost(
         navController = navController,
         startDestination = FoxyRoutes.SPLASH,
@@ -259,6 +262,7 @@ fun FoxyNavGraph(
             }
         }
         composable(FoxyRoutes.LOGS) { GlassScreen { LogsScreen(onBack = { navController.popBackStack() }) } }
+    }
     }
     }
         AnimatedVisibility(

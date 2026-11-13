@@ -1,5 +1,9 @@
 package com.vauth.foxyvpn.ui.components
 
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.unit.IntSize
+import kotlin.math.roundToInt
 import android.graphics.Bitmap
 import android.view.View
 import androidx.compose.animation.core.Animatable
@@ -43,8 +47,14 @@ class ThemeReveal {
         }
         val photo =
             try {
-                val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
-                view.draw(android.graphics.Canvas(bitmap))
+                // Half resolution: a quarter of the pixels to draw and to keep on
+                // screen, and it is only visible for half a second.
+                val w = max(1, view.width / 2)
+                val h = max(1, view.height / 2)
+                val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                val canvas = android.graphics.Canvas(bitmap)
+                canvas.scale(w / view.width.toFloat(), h / view.height.toFloat())
+                withGlassPaused { view.draw(canvas) }
                 bitmap.asImageBitmap()
             } catch (error: Exception) {
                 AppLogger.w("ThemeReveal", "could not photograph the screen; switching without animation", error)
@@ -52,11 +62,14 @@ class ThemeReveal {
             }
         this.center = center
         snapshot = photo
+        if (photo != null) setGlassPaused(true)
         change()
     }
 
     internal fun finish() {
         snapshot = null
+        setGlassPaused(false)
+        GlassClock.keepLive(300L)
     }
 }
 
@@ -68,8 +81,14 @@ fun ThemeRevealOverlay(reveal: ThemeReveal) {
     val photo = reveal.snapshot ?: return
     val progress = androidx.compose.runtime.remember(photo) { Animatable(0f) }
     LaunchedEffect(photo) {
-        progress.animateTo(1f, tween(560, easing = EmphasizedEasing))
-        reveal.finish()
+        try {
+            // Let the new theme compose and draw underneath before uncovering it,
+            // so that work does not land in the middle of the animation.
+            repeat(3) { withFrameNanos {} }
+            progress.animateTo(1f, tween(480, easing = EmphasizedEasing))
+        } finally {
+            reveal.finish()
+        }
     }
     Canvas(Modifier.fillMaxSize()) {
         val c = reveal.center
@@ -80,6 +99,12 @@ fun ThemeRevealOverlay(reveal: ThemeReveal) {
             )
         val radius = reach * progress.value
         val hole = Path().apply { addOval(Rect(center = c, radius = radius)) }
-        clipPath(hole, clipOp = ClipOp.Difference) { drawImage(photo) }
+        clipPath(hole, clipOp = ClipOp.Difference) {
+            drawImage(
+                image = photo,
+                dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+                filterQuality = FilterQuality.Low,
+            )
+        }
     }
 }

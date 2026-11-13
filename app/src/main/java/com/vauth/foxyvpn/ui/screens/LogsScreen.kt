@@ -1,5 +1,6 @@
 package com.vauth.foxyvpn.ui.screens
 
+import com.vauth.foxyvpn.ui.components.LocalGlassContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -13,8 +14,6 @@ import androidx.compose.ui.semantics.Role
 import com.vauth.foxyvpn.ui.components.GlassButton
 import com.vauth.foxyvpn.ui.components.GlassSurface
 import com.vauth.foxyvpn.ui.components.GlassTopBar
-import com.vauth.foxyvpn.ui.components.glassSource
-import com.vauth.foxyvpn.ui.components.rememberGlassSource
 import androidx.compose.ui.res.painterResource
 import android.widget.Toast
 import androidx.compose.foundation.horizontalScroll
@@ -103,7 +102,7 @@ fun LogsScreen(
             }
         }
 
-    val listContent = rememberGlassSource()
+    val listContent = LocalGlassContent.current
     Scaffold(
         topBar = {
             GlassTopBar(
@@ -178,7 +177,7 @@ fun LogsScreen(
                 GlassSurface(
                     Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 16.dp)
                 ) {
-                LazyColumn(Modifier.fillMaxSize().glassSource(listContent), contentPadding = PaddingValues(vertical = 8.dp)) {
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
                     items(visible.asReversed(), key = { it.id }) { entry ->
                         val color =
                             when (entry.level) {

@@ -1,12 +1,11 @@
 package com.vauth.foxyvpn.ui.screens
 
+import com.vauth.foxyvpn.ui.components.LocalGlassContent
 import com.vauth.foxyvpn.ui.components.GlassTextButton
 import com.vauth.foxyvpn.ui.components.GlassAlertDialog
 import com.vauth.foxyvpn.ui.components.GlassButton
 import com.vauth.foxyvpn.ui.components.GlassGroup
 import com.vauth.foxyvpn.ui.components.GlassTopBar
-import com.vauth.foxyvpn.ui.components.glassSource
-import com.vauth.foxyvpn.ui.components.rememberGlassSource
 import androidx.compose.ui.res.painterResource
 import android.content.Intent
 import com.vauth.foxyvpn.ui.localizedLabel
@@ -345,7 +344,7 @@ fun SettingsScreen(
         )
     }
 
-    val listContent = rememberGlassSource()
+    val listContent = LocalGlassContent.current
     Scaffold(
         topBar = {
             GlassTopBar(
@@ -357,7 +356,6 @@ fun SettingsScreen(
     ) { padding ->
         Column(
             Modifier.fillMaxSize()
-                .glassSource(listContent)
                 .verticalScroll(rememberScrollState())
                 .padding(padding)
                 .padding(bottom = 120.dp)

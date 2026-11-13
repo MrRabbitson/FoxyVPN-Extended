@@ -1,5 +1,6 @@
 package com.vauth.foxyvpn.ui.screens
 
+import com.vauth.foxyvpn.ui.components.LocalGlassContent
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
@@ -8,8 +9,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalView
 import com.vauth.foxyvpn.ui.components.GlassTopBar
 import com.vauth.foxyvpn.ui.components.LocalThemeReveal
-import com.vauth.foxyvpn.ui.components.glassSource
-import com.vauth.foxyvpn.ui.components.rememberGlassSource
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -158,7 +157,7 @@ fun HomeScreen(
     val isConnected = state == ConnectionState.CONNECTED
     val secondary = MaterialTheme.colorScheme.onSurfaceVariant
 
-    val content = rememberGlassSource()
+    val content = LocalGlassContent.current
     val reveal = LocalThemeReveal.current
     val rootView = LocalView.current
     var themeButtonCenter by remember { mutableStateOf(Offset.Zero) }
@@ -175,7 +174,6 @@ fun HomeScreen(
             modifier =
                 Modifier.widthIn(max = 520.dp)
                     .fillMaxWidth()
-                    .glassSource(content)
                     .verticalScroll(scrollState)
                     .statusBarsPadding()
                     .padding(horizontal = 16.dp),

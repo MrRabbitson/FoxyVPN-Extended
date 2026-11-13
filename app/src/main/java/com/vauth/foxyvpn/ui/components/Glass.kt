@@ -110,7 +110,10 @@ import com.vauth.foxyvpn.ui.theme.FoxMagenta
 import com.vauth.foxyvpn.ui.theme.FoxOrange
 import com.vauth.foxyvpn.ui.theme.FoxViolet
 
-private const val CAPTURE_WIDTH = 96
+private const val CAPTURE_WIDTH = 72
+
+/** While live, the picture behind the glass is retaken at most this often. */
+private const val CAPTURE_INTERVAL_MS = 50L
 
 /**
  * Decides when the picture behind the glass is retaken. Scrolling moves
@@ -157,8 +160,25 @@ fun Modifier.glassTouchWatch(): Modifier =
         }
     }
 
-/** A source is never captured while another one is, or it would be drawn twice per frame. */
+/** True while a source is being drawn off-screen; floating panes leave themselves out of it. */
 private var capturing = false
+/** True while something else needs every frame (the theme reveal); no pictures are taken then. */
+private var capturePaused = false
+
+/** Runs [block] with glass pictures switched off. */
+internal fun <T> withGlassPaused(block: () -> T): T {
+    val before = capturePaused
+    capturePaused = true
+    try {
+        return block()
+    } finally {
+        capturePaused = before
+    }
+}
+
+internal fun setGlassPaused(paused: Boolean) {
+    capturePaused = paused
+}
 /** Set if drawing content off-screen ever fails on this device; glass then shows the backdrop only. */
 private var captureBroken = false
 
@@ -177,6 +197,7 @@ class GlassSource internal constructor(private val backdrop: GlassBackdrop?) {
         private set
 
     private var frame by mutableIntStateOf(0)
+    internal var capturedAt = 0L
     private var canvas: ComposeCanvas? = null
     private var pixels = IntArray(0)
     private var scratch = IntArray(0)
@@ -240,7 +261,9 @@ fun Modifier.glassSource(source: GlassSource): Modifier =
         .drawWithContent {
             GlassClock.observe()
             drawContent()
-            if (!capturing && !captureBroken) {
+            val now = SystemClock.uptimeMillis()
+            if (!capturing && !captureBroken && !capturePaused && now - source.capturedAt >= CAPTURE_INTERVAL_MS) {
+                source.capturedAt = now
                 capturing = true
                 try {
                     source.capture(this)
@@ -268,6 +291,9 @@ class GlassBackdrop {
 
 /** Null inside dialogs, which live in their own window. */
 val LocalGlassBackdrop = staticCompositionLocalOf<GlassBackdrop?> { null }
+
+/** The picture of the current screen's content, for bars that float above it. */
+val LocalGlassContent = staticCompositionLocalOf<GlassSource?> { null }
 
 enum class GlassRim {
     /** Light catches opposite corners. For large panes. */
@@ -359,6 +385,8 @@ fun GlassSurface(
                     // Half of the stroke is clipped away, leaving a 1dp inner rim.
                     val edgeStroke = Stroke(width = 2.dp.toPx())
                     onDrawWithContent {
+                        // A pane floating over content is not part of what is behind it.
+                        if (capturing && over != null) return@onDrawWithContent
                         if (backdrop != null) {
                             val at = position
                             // What is behind this pane, blurred: the content it floats
@@ -372,7 +400,7 @@ fun GlassSurface(
                                         image = picture,
                                         dstSize = IntSize(area.width.roundToInt(), area.height.roundToInt()),
                                         colorFilter = Vivid,
-                                        filterQuality = FilterQuality.Medium,
+                                        filterQuality = FilterQuality.Low,
                                     )
                                 }
                             } else {
@@ -384,7 +412,7 @@ fun GlassSurface(
                                             image = image,
                                             dstSize = IntSize(area.width.roundToInt(), area.height.roundToInt()),
                                             colorFilter = Vivid,
-                                            filterQuality = FilterQuality.Medium,
+                                            filterQuality = FilterQuality.Low,
                                         )
                                     }
                                 }
@@ -797,36 +825,51 @@ private fun renderBlurredField(area: Size, glow: Float, dark: Boolean, base: Col
     return bitmap
 }
 
-/** One box-blur pass over opaque pixels, in place; two passes give a soft, even blur. */
+/**
+ * One box-blur pass over opaque pixels, in place, with running sums so the
+ * cost does not depend on the radius. Two passes give a soft, even blur.
+ */
 private fun boxBlur(pixels: IntArray, scratch: IntArray, w: Int, h: Int, radius: Int) {
     val window = radius * 2 + 1
+    // Rows: pixels -> scratch
     for (y in 0 until h) {
         val row = y * w
+        var r = 0
+        var g = 0
+        var b = 0
+        for (k in -radius..radius) {
+            val p = pixels[row + k.coerceIn(0, w - 1)]
+            r += (p shr 16) and 0xFF
+            g += (p shr 8) and 0xFF
+            b += p and 0xFF
+        }
         for (x in 0 until w) {
-            var r = 0
-            var g = 0
-            var b = 0
-            for (k in -radius..radius) {
-                val p = pixels[row + (x + k).coerceIn(0, w - 1)]
-                r += (p shr 16) and 0xFF
-                g += (p shr 8) and 0xFF
-                b += p and 0xFF
-            }
             scratch[row + x] = (0xFF shl 24) or ((r / window) shl 16) or ((g / window) shl 8) or (b / window)
+            val enter = pixels[row + minOf(x + radius + 1, w - 1)]
+            val leave = pixels[row + maxOf(x - radius, 0)]
+            r += ((enter shr 16) and 0xFF) - ((leave shr 16) and 0xFF)
+            g += ((enter shr 8) and 0xFF) - ((leave shr 8) and 0xFF)
+            b += (enter and 0xFF) - (leave and 0xFF)
         }
     }
-    for (y in 0 until h) {
-        for (x in 0 until w) {
-            var r = 0
-            var g = 0
-            var b = 0
-            for (k in -radius..radius) {
-                val p = scratch[(y + k).coerceIn(0, h - 1) * w + x]
-                r += (p shr 16) and 0xFF
-                g += (p shr 8) and 0xFF
-                b += p and 0xFF
-            }
+    // Columns: scratch -> pixels
+    for (x in 0 until w) {
+        var r = 0
+        var g = 0
+        var b = 0
+        for (k in -radius..radius) {
+            val p = scratch[k.coerceIn(0, h - 1) * w + x]
+            r += (p shr 16) and 0xFF
+            g += (p shr 8) and 0xFF
+            b += p and 0xFF
+        }
+        for (y in 0 until h) {
             pixels[y * w + x] = (0xFF shl 24) or ((r / window) shl 16) or ((g / window) shl 8) or (b / window)
+            val enter = scratch[minOf(y + radius + 1, h - 1) * w + x]
+            val leave = scratch[maxOf(y - radius, 0) * w + x]
+            r += ((enter shr 16) and 0xFF) - ((leave shr 16) and 0xFF)
+            g += ((enter shr 8) and 0xFF) - ((leave shr 8) and 0xFF)
+            b += (enter and 0xFF) - (leave and 0xFF)
         }
     }
 }
