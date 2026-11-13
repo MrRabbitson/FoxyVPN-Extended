@@ -1,5 +1,6 @@
 package com.vauth.foxyvpn.ui.screens
 
+import androidx.compose.foundation.layout.systemBarsPadding
 import com.vauth.foxyvpn.ui.components.GlassIconButton
 import com.vauth.foxyvpn.ui.components.GlassRim
 import com.vauth.foxyvpn.ui.components.GlassSurface
@@ -77,6 +78,7 @@ fun LoginScreen(
     androidx.compose.runtime.LaunchedEffect(uiState.signedIn) { if (uiState.signedIn) onSignedIn() }
 
     if (browserStartUrl != null) {
+        Box(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
         BrowserLoginScreen(
             startUrl = browserStartUrl,
             busy = completingBrowserLogin,
@@ -84,6 +86,7 @@ fun LoginScreen(
             onSessionCaptured = model::completeBrowserLogin,
             onCanceled = model::cancelVerification,
         )
+        }
         return
     }
 

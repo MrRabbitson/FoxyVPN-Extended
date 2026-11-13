@@ -1,5 +1,19 @@
 package com.vauth.foxyvpn.ui.components
 
+import android.os.SystemClock
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
+import androidx.compose.ui.graphics.drawscope.draw
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import com.vauth.foxyvpn.data.AppLogger
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.widthIn
@@ -73,19 +87,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.isSpecified
-import androidx.compose.ui.graphics.layer.GraphicsLayer
-import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
@@ -101,51 +110,160 @@ import com.vauth.foxyvpn.ui.theme.FoxMagenta
 import com.vauth.foxyvpn.ui.theme.FoxOrange
 import com.vauth.foxyvpn.ui.theme.FoxViolet
 
-/** Real backdrop blur needs RenderEffect, which exists from Android 12. */
-private val BlurSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+private const val CAPTURE_WIDTH = 96
 
 /**
- * Something glass can sit on top of. Whatever is drawn by the node carrying
- * [glassSource] is also kept in [layer], so panes above can redraw the part
- * that lies behind them, blurred.
+ * Decides when the picture behind the glass is retaken. Scrolling moves
+ * content without redrawing it, so nothing would tell a pane that what is
+ * under it changed; while the screen is being touched (and briefly after) the
+ * picture is retaken every frame, otherwise a couple of times a second.
  */
-class GlassSource internal constructor(internal val layer: GraphicsLayer) {
-    internal var origin by mutableStateOf(Offset.Zero)
-    private var frame by mutableIntStateOf(0)
+object GlassClock {
+    private var tick by mutableIntStateOf(0)
+    private val wake = Channel<Unit>(Channel.CONFLATED)
+    @Volatile private var busyUntil = 0L
 
-    /** Subscribes the caller to redraws of this source. */
+    internal fun observe(): Int = tick
+
+    /** Keep the glass live for [millis] from now. */
+    fun keepLive(millis: Long) {
+        busyUntil = SystemClock.uptimeMillis() + millis
+        wake.trySend(Unit)
+    }
+
+    suspend fun run() {
+        while (true) {
+            if (SystemClock.uptimeMillis() < busyUntil) {
+                withFrameNanos { tick++ }
+            } else {
+                withTimeoutOrNull(500L) { wake.receive() }
+                tick++
+            }
+        }
+    }
+}
+
+/** Marks the whole app as "being touched" for [GlassClock]; consumes nothing. */
+fun Modifier.glassTouchWatch(): Modifier =
+    pointerInput(Unit) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            GlassClock.keepLive(60_000L)
+            do {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+            } while (event.changes.any { it.pressed })
+            // Flings and settle animations outlast the finger.
+            GlassClock.keepLive(1_600L)
+        }
+    }
+
+/** A source is never captured while another one is, or it would be drawn twice per frame. */
+private var capturing = false
+/** Set if drawing content off-screen ever fails on this device; glass then shows the backdrop only. */
+private var captureBroken = false
+
+/**
+ * Something glass can sit on top of. Each time the node carrying
+ * [glassSource] is drawn, a small blurred picture of it (on top of the
+ * backdrop) is kept, and panes above show the piece that lies behind them.
+ * This is what CSS calls backdrop-filter: blur, done by hand so that it works
+ * on every Android version.
+ */
+class GlassSource internal constructor(private val backdrop: GlassBackdrop?) {
+    internal var origin by mutableStateOf(Offset.Zero)
+    internal var area = Size.Zero
+        private set
+    internal var blurred: ImageBitmap? = null
+        private set
+
+    private var frame by mutableIntStateOf(0)
+    private var canvas: ComposeCanvas? = null
+    private var pixels = IntArray(0)
+    private var scratch = IntArray(0)
+
+    /** Subscribes the caller to new pictures of this source. */
     internal fun observe(): Int = frame
 
-    /** Called after the source has drawn; never subscribes the caller. */
-    internal fun markDrawn() {
+    internal fun capture(scope: ContentDrawScope) {
+        val full = scope.size
+        if (full.width < 1f || full.height < 1f) return
+        val scale = CAPTURE_WIDTH / full.width
+        val w = CAPTURE_WIDTH
+        val h = max(1, (full.height * scale).roundToInt())
+        var bitmap = blurred
+        var target = canvas
+        if (bitmap == null || target == null || bitmap.width != w || bitmap.height != h) {
+            bitmap = ImageBitmap(w, h)
+            target = ComposeCanvas(bitmap)
+            canvas = target
+            pixels = IntArray(w * h)
+            scratch = IntArray(w * h)
+        }
+        val native = target.nativeCanvas
+        val checkpoint = native.save()
+        try {
+            native.scale(scale, scale)
+            val behind = backdrop
+            if (behind != null && behind.area.width > 0f) {
+                native.save()
+                native.translate(behind.origin.x - origin.x, behind.origin.y - origin.y)
+                scope.draw(scope, scope.layoutDirection, target, behind.area) {
+                    drawFlameField(behind.glow, behind.dark, behind.base)
+                }
+                native.restore()
+            } else {
+                native.drawColor(android.graphics.Color.BLACK)
+            }
+            scope.draw(scope, scope.layoutDirection, target, full) { scope.drawContent() }
+        } finally {
+            native.restoreToCount(checkpoint)
+        }
+        val raw = bitmap.asAndroidBitmap()
+        raw.getPixels(pixels, 0, w, 0, 0, w, h)
+        boxBlur(pixels, scratch, w, h, radius = 2)
+        boxBlur(pixels, scratch, w, h, radius = 2)
+        raw.setPixels(pixels, 0, w, 0, 0, w, h)
+        area = full
+        blurred = bitmap
         Snapshot.withoutReadObservation { frame++ }
     }
 }
 
 @Composable
 fun rememberGlassSource(): GlassSource {
-    val layer = rememberGraphicsLayer()
-    return remember(layer) { GlassSource(layer) }
+    val backdrop = LocalGlassBackdrop.current
+    return remember(backdrop) { GlassSource(backdrop) }
 }
 
 fun Modifier.glassSource(source: GlassSource): Modifier =
     this.onGloballyPositioned { source.origin = it.positionInRoot() }
         .drawWithContent {
-            source.layer.record { this@drawWithContent.drawContent() }
-            drawLayer(source.layer)
-            // Tell panes above that what is behind them has changed.
-            source.markDrawn()
+            GlassClock.observe()
+            drawContent()
+            if (!capturing && !captureBroken) {
+                capturing = true
+                try {
+                    source.capture(this)
+                } catch (error: Exception) {
+                    captureBroken = true
+                    AppLogger.w("Glass", "off-screen capture is unavailable; glass shows the backdrop only", error)
+                } finally {
+                    capturing = false
+                }
+            }
         }
 
 /**
- * The colour backdrop shared by every screen. Panes read it to paint the part
- * of the backdrop that lies behind them in its out-of-focus form.
+ * The colour backdrop shared by every screen. Panes that have no content
+ * under them show the matching piece of its blurred picture.
  */
 class GlassBackdrop {
     internal var origin by mutableStateOf(Offset.Zero)
     internal var area by mutableStateOf(Size.Zero)
-    /** The whole backdrop, blurred; panes show the piece of it that is behind them. */
     internal var blurred by mutableStateOf<ImageBitmap?>(null)
+    internal var glow = 1f
+    internal var dark = true
+    internal var base = Color.Black
 }
 
 /** Null inside dialogs, which live in their own window. */
@@ -190,14 +308,6 @@ fun GlassSurface(
             label = "glass-press",
         )
 
-    val blurRadius = with(LocalDensity.current) { 22.dp.toPx() }
-    val pane = rememberGraphicsLayer()
-    if (BlurSupported && over != null) {
-        remember(pane, blurRadius) {
-            pane.renderEffect = BlurEffect(blurRadius, blurRadius, TileMode.Clamp)
-            true
-        }
-    }
     var position by remember { mutableStateOf(Offset.Zero) }
 
     // Only a whisper of white over the blurred backdrop: the colour comes from
@@ -251,28 +361,33 @@ fun GlassSurface(
                     onDrawWithContent {
                         if (backdrop != null) {
                             val at = position
-                            // The piece of the blurred backdrop that lies behind this pane.
-                            val image = backdrop.blurred
-                            val area = backdrop.area
-                            if (image != null && area.width > 0f) {
-                                translate(backdrop.origin.x - at.x, backdrop.origin.y - at.y) {
+                            // What is behind this pane, blurred: the content it floats
+                            // over if there is any, otherwise the backdrop.
+                            over?.observe()
+                            val picture = over?.blurred
+                            if (over != null && picture != null) {
+                                val area = over.area
+                                translate(over.origin.x - at.x, over.origin.y - at.y) {
                                     drawImage(
-                                        image = image,
+                                        image = picture,
                                         dstSize = IntSize(area.width.roundToInt(), area.height.roundToInt()),
                                         colorFilter = Vivid,
                                         filterQuality = FilterQuality.Medium,
                                     )
                                 }
-                            }
-                            // Content scrolling under the pane is blurred live.
-                            if (over != null && BlurSupported) {
-                                over.observe()
-                                pane.record {
-                                    translate(over.origin.x - at.x, over.origin.y - at.y) {
-                                        drawLayer(over.layer)
+                            } else {
+                                val image = backdrop.blurred
+                                val area = backdrop.area
+                                if (image != null && area.width > 0f) {
+                                    translate(backdrop.origin.x - at.x, backdrop.origin.y - at.y) {
+                                        drawImage(
+                                            image = image,
+                                            dstSize = IntSize(area.width.roundToInt(), area.height.roundToInt()),
+                                            colorFilter = Vivid,
+                                            filterQuality = FilterQuality.Medium,
+                                        )
                                     }
                                 }
-                                drawLayer(pane)
                             }
                         }
                         if (tint.isSpecified) drawOutline(outline, tint)
@@ -300,32 +415,14 @@ fun GlassSurface(
     )
 }
 
-/**
- * A card for content: grouped rows, lists. Deliberately not glass. Glass is
- * kept for controls that float above content; the content itself sits on a
- * quiet, even surface so it stays easy to read.
- */
+/** A card for content (grouped rows, lists): a glass pane with a calmer rim. */
 @Composable
 fun SectionCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    val dark = isDarkGlass()
-    val shape = RoundedCornerShape(22.dp)
-    Box(
-        modifier =
-            modifier
-                .clip(shape)
-                .background(if (dark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.92f))
-                .border(
-                    1.dp,
-                    if (dark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.04f),
-                    shape,
-                )
-                .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier),
-        content = content,
-    )
+    GlassSurface(modifier = modifier, shape = RoundedCornerShape(22.dp), onClick = onClick, content = content)
 }
 
 /** Hairline between rows of a [SectionCard], inset like the row text. */
@@ -502,10 +599,12 @@ fun GlassTopBar(
     title: String,
     onBack: (() -> Unit)?,
     over: GlassSource? = null,
+    modifier: Modifier = Modifier,
+    leading: (@Composable () -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     Box(
-        Modifier.fillMaxWidth()
+        modifier.fillMaxWidth()
             .windowInsetsPadding(WindowInsets.statusBars)
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
@@ -532,12 +631,14 @@ fun GlassTopBar(
                         )
                     }
                 }
+                if (onBack == null) Spacer(Modifier.width(if (leading == null) 10.dp else 6.dp))
+                leading?.invoke()
                 Text(
                     title,
                     style = MaterialTheme.typography.titleLarge,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f).padding(start = if (onBack == null) 14.dp else 0.dp),
+                    modifier = Modifier.weight(1f),
                 )
                 actions()
             }
@@ -639,7 +740,9 @@ private val Discs =
     listOf(
         Disc(FoxOrange, 0.50f, 0.20f, 0.95f, warm = true, weight = 1f),
         Disc(FoxMagenta, 1.05f, 0.02f, 0.70f, warm = true, weight = 0.45f),
-        Disc(FoxViolet, -0.05f, 0.55f, 0.80f, warm = false, weight = 1f),
+        Disc(FoxViolet, -0.05f, 0.52f, 0.80f, warm = false, weight = 1f),
+        Disc(FoxMagenta, 1.00f, 0.80f, 0.75f, warm = false, weight = 0.8f),
+        Disc(FoxOrange, 0.20f, 1.02f, 0.70f, warm = false, weight = 0.7f),
     )
 
 /**
@@ -649,7 +752,7 @@ private val Discs =
 private fun DrawScope.drawFlameField(glow: Float, dark: Boolean, base: Color) {
     drawRect(base)
     val warm = (if (dark) 0.30f else 0.22f) * (0.30f + 0.70f * glow)
-    val cool = if (dark) 0.10f else 0.06f
+    val cool = if (dark) 0.20f else 0.12f
     for (disc in Discs) {
         val strength = (if (disc.warm) warm else cool) * disc.weight
         val at = Offset(size.width * disc.x, size.height * disc.y)
@@ -672,8 +775,6 @@ private fun DrawScope.drawFlameField(glow: Float, dark: Boolean, base: Color) {
 /** Slight saturation lift, as glass does to what is seen through it. */
 private val Vivid = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(1.35f) })
 
-private const val BLUR_WIDTH = 96
-
 /**
  * A blurred picture of the whole backdrop. It is painted small and blurred in
  * software, which works on every Android version; stretched back to full size
@@ -681,54 +782,53 @@ private const val BLUR_WIDTH = 96
  */
 private fun renderBlurredField(area: Size, glow: Float, dark: Boolean, base: Color, density: Density): ImageBitmap? {
     if (area.width < 1f || area.height < 1f) return null
-    val w = BLUR_WIDTH
-    val h = max(1, (BLUR_WIDTH * area.height / area.width).roundToInt())
+    val w = CAPTURE_WIDTH
+    val h = max(1, (CAPTURE_WIDTH * area.height / area.width).roundToInt())
     val bitmap = ImageBitmap(w, h)
     CanvasDrawScope().draw(density, LayoutDirection.Ltr, ComposeCanvas(bitmap), Size(w.toFloat(), h.toFloat())) {
         drawFlameField(glow, dark, base)
     }
     val native = bitmap.asAndroidBitmap()
-    var pixels = IntArray(w * h)
+    val pixels = IntArray(w * h)
+    val scratch = IntArray(w * h)
     native.getPixels(pixels, 0, w, 0, 0, w, h)
-    repeat(3) { pixels = boxBlur(pixels, w, h, radius = 3) }
+    repeat(3) { boxBlur(pixels, scratch, w, h, radius = 3) }
     native.setPixels(pixels, 0, w, 0, 0, w, h)
     return bitmap
 }
 
-/** One box-blur pass over opaque pixels; three passes approximate a Gaussian. */
-private fun boxBlur(source: IntArray, w: Int, h: Int, radius: Int): IntArray {
+/** One box-blur pass over opaque pixels, in place; two passes give a soft, even blur. */
+private fun boxBlur(pixels: IntArray, scratch: IntArray, w: Int, h: Int, radius: Int) {
     val window = radius * 2 + 1
-    val temp = IntArray(source.size)
+    for (y in 0 until h) {
+        val row = y * w
+        for (x in 0 until w) {
+            var r = 0
+            var g = 0
+            var b = 0
+            for (k in -radius..radius) {
+                val p = pixels[row + (x + k).coerceIn(0, w - 1)]
+                r += (p shr 16) and 0xFF
+                g += (p shr 8) and 0xFF
+                b += p and 0xFF
+            }
+            scratch[row + x] = (0xFF shl 24) or ((r / window) shl 16) or ((g / window) shl 8) or (b / window)
+        }
+    }
     for (y in 0 until h) {
         for (x in 0 until w) {
             var r = 0
             var g = 0
             var b = 0
             for (k in -radius..radius) {
-                val p = source[y * w + (x + k).coerceIn(0, w - 1)]
+                val p = scratch[(y + k).coerceIn(0, h - 1) * w + x]
                 r += (p shr 16) and 0xFF
                 g += (p shr 8) and 0xFF
                 b += p and 0xFF
             }
-            temp[y * w + x] = (0xFF shl 24) or ((r / window) shl 16) or ((g / window) shl 8) or (b / window)
+            pixels[y * w + x] = (0xFF shl 24) or ((r / window) shl 16) or ((g / window) shl 8) or (b / window)
         }
     }
-    val result = IntArray(source.size)
-    for (y in 0 until h) {
-        for (x in 0 until w) {
-            var r = 0
-            var g = 0
-            var b = 0
-            for (k in -radius..radius) {
-                val p = temp[(y + k).coerceIn(0, h - 1) * w + x]
-                r += (p shr 16) and 0xFF
-                g += (p shr 8) and 0xFF
-                b += p and 0xFF
-            }
-            result[y * w + x] = (0xFF shl 24) or ((r / window) shl 16) or ((g / window) shl 8) or (b / window)
-        }
-    }
-    return result
 }
 
 /**
@@ -754,6 +854,9 @@ fun FlameBackdrop(state: GlassBackdrop, modifier: Modifier = Modifier, intensity
         remember(area, dark, base, glowStep) {
             renderBlurredField(area, glowStep / 16f, dark, base, density)
         }
+    state.glow = glowStep / 16f
+    state.dark = dark
+    state.base = base
     SideEffect { state.blurred = blurred }
     Canvas(
         modifier.onGloballyPositioned {

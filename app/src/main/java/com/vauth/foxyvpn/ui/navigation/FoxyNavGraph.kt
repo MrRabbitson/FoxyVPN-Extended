@@ -1,5 +1,7 @@
 package com.vauth.foxyvpn.ui.navigation
 
+import androidx.compose.runtime.LaunchedEffect
+import com.vauth.foxyvpn.ui.components.GlassClock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -99,6 +101,7 @@ fun FoxyNavGraph(
         }
     }
     val screens = rememberGlassSource()
+    LaunchedEffect(route) { GlassClock.keepLive(900L) }
     Box(Modifier.fillMaxSize()) {
     Box(Modifier.fillMaxSize().glassSource(screens)) {
     NavHost(

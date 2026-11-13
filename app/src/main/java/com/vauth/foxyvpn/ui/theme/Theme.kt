@@ -1,6 +1,8 @@
 package com.vauth.foxyvpn.ui.theme
 
-import android.app.Activity
+import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,7 +21,6 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.core.view.WindowCompat
 import com.vauth.foxyvpn.data.ThemeMode
 
 private val LightColors =
@@ -138,11 +139,11 @@ fun FoxyVpnTheme(
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            val window = (view.context as? Activity)?.window ?: return@SideEffect
-            WindowCompat.getInsetsController(window, view).apply {
-                isAppearanceLightStatusBars = !darkTheme
-                isAppearanceLightNavigationBars = !darkTheme
-            }
+            // Draw behind both system bars and match their icons to the theme.
+            val activity = view.context as? ComponentActivity ?: return@SideEffect
+            val clear = android.graphics.Color.TRANSPARENT
+            val style = if (darkTheme) SystemBarStyle.dark(clear) else SystemBarStyle.light(clear, clear)
+            activity.enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
         }
     }
 

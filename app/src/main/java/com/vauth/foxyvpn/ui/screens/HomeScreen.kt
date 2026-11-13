@@ -1,5 +1,15 @@
 package com.vauth.foxyvpn.ui.screens
 
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalView
+import com.vauth.foxyvpn.ui.components.GlassTopBar
+import com.vauth.foxyvpn.ui.components.LocalThemeReveal
+import com.vauth.foxyvpn.ui.components.glassSource
+import com.vauth.foxyvpn.ui.components.rememberGlassSource
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -74,8 +84,6 @@ import com.vauth.foxyvpn.ui.HomeViewModel
 import com.vauth.foxyvpn.ui.components.FoxConnectButton
 import com.vauth.foxyvpn.ui.components.FoxMascot
 import com.vauth.foxyvpn.ui.components.FoxMood
-import com.vauth.foxyvpn.ui.components.GlassRim
-import com.vauth.foxyvpn.ui.components.GlassSurface
 import com.vauth.foxyvpn.ui.components.RollingText
 import com.vauth.foxyvpn.ui.components.RowDivider
 import com.vauth.foxyvpn.ui.components.SectionCard
@@ -150,7 +158,15 @@ fun HomeScreen(
     val isConnected = state == ConnectionState.CONNECTED
     val secondary = MaterialTheme.colorScheme.onSurfaceVariant
 
-    BoxWithConstraints(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.TopCenter) {
+    val content = rememberGlassSource()
+    val reveal = LocalThemeReveal.current
+    val rootView = LocalView.current
+    var themeButtonCenter by remember { mutableStateOf(Offset.Zero) }
+    fun switchTheme(change: () -> Unit) {
+        if (reveal != null) reveal.start(rootView, themeButtonCenter, change) else change()
+    }
+
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         val scrollState = rememberScrollState()
         // Centre the hero on tall screens instead of leaving all the slack at the bottom.
         val slack = (maxHeight - 760.dp).coerceAtLeast(0.dp)
@@ -159,60 +175,14 @@ fun HomeScreen(
             modifier =
                 Modifier.widthIn(max = 520.dp)
                     .fillMaxWidth()
+                    .glassSource(content)
                     .verticalScroll(scrollState)
+                    .statusBarsPadding()
                     .padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(start = 4.dp, top = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                FoxMascot(mood = FoxMood.GUARDING, modifier = Modifier.size(26.dp), animated = false)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                Spacer(Modifier.weight(1f))
-                val mode = themeController.mode
-                val showingDark = themeController.resolveDark(systemInDarkTheme)
-                GlassSurface(modifier = Modifier.size(42.dp), shape = CircleShape, rim = GlassRim.Vertical) {
-                    Box(
-                        modifier =
-                            Modifier.fillMaxSize()
-                                .combinedClickable(
-                                    role = Role.Button,
-                                    onClick = { themeController.toggle(systemInDarkTheme) },
-                                    onLongClick = {
-                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        themeController.set(ThemeMode.SYSTEM)
-                                    },
-                                ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            painter =
-                                painterResource(
-                                    when (mode) {
-                                        ThemeMode.SYSTEM -> R.drawable.lucide_sun_moon
-                                        ThemeMode.LIGHT -> R.drawable.lucide_sun
-                                        ThemeMode.DARK -> R.drawable.lucide_moon
-                                    }
-                                ),
-                            contentDescription =
-                                when (mode) {
-                                    ThemeMode.SYSTEM ->
-                                        if (showingDark) stringResource(R.string.theme_desc_system_light)
-                                        else stringResource(R.string.theme_desc_system_dark)
-                                    ThemeMode.LIGHT -> stringResource(R.string.theme_desc_light)
-                                    ThemeMode.DARK -> stringResource(R.string.theme_desc_dark)
-                                },
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
-            }
+            // Room for the pinned header.
+            Spacer(Modifier.height(72.dp))
 
             Spacer(Modifier.height(20.dp + slack / 2))
 
@@ -472,6 +442,55 @@ fun HomeScreen(
 
             // Room for the floating tab bar.
             Spacer(Modifier.height(120.dp))
+            Spacer(Modifier.navigationBarsPadding())
+        }
+
+        GlassTopBar(
+            title = stringResource(R.string.app_name),
+            onBack = null,
+            over = content,
+            modifier = Modifier.widthIn(max = 520.dp),
+            leading = {
+                FoxMascot(mood = FoxMood.GUARDING, modifier = Modifier.size(26.dp), animated = false)
+            },
+        ) {
+            val mode = themeController.mode
+            val showingDark = themeController.resolveDark(systemInDarkTheme)
+            Box(
+                modifier =
+                    Modifier.size(44.dp)
+                        .onGloballyPositioned { themeButtonCenter = it.boundsInRoot().center }
+                        .clip(CircleShape)
+                        .combinedClickable(
+                            role = Role.Button,
+                            onClick = { switchTheme { themeController.toggle(systemInDarkTheme) } },
+                            onLongClick = {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                switchTheme { themeController.set(ThemeMode.SYSTEM) }
+                            },
+                        ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter =
+                        painterResource(
+                            when (mode) {
+                                ThemeMode.SYSTEM -> R.drawable.lucide_sun_moon
+                                ThemeMode.LIGHT -> R.drawable.lucide_sun
+                                ThemeMode.DARK -> R.drawable.lucide_moon
+                            }
+                        ),
+                    contentDescription =
+                        when (mode) {
+                            ThemeMode.SYSTEM ->
+                                if (showingDark) stringResource(R.string.theme_desc_system_light)
+                                else stringResource(R.string.theme_desc_system_dark)
+                            ThemeMode.LIGHT -> stringResource(R.string.theme_desc_light)
+                            ThemeMode.DARK -> stringResource(R.string.theme_desc_dark)
+                        },
+                    modifier = Modifier.size(21.dp),
+                )
+            }
         }
     }
 }

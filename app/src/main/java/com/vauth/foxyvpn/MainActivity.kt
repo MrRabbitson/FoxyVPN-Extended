@@ -1,5 +1,11 @@
 package com.vauth.foxyvpn
 
+import androidx.compose.runtime.LaunchedEffect
+import com.vauth.foxyvpn.ui.components.GlassClock
+import com.vauth.foxyvpn.ui.components.LocalThemeReveal
+import com.vauth.foxyvpn.ui.components.ThemeReveal
+import com.vauth.foxyvpn.ui.components.ThemeRevealOverlay
+import com.vauth.foxyvpn.ui.components.glassTouchWatch
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -117,8 +123,10 @@ class MainActivity : ComponentActivity() {
             FoxyVpnTheme(themeMode = themeController.mode) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val backdrop = remember { GlassBackdrop() }
+                    val reveal = remember { ThemeReveal() }
+                    LaunchedEffect(Unit) { GlassClock.run() }
                     val vpnState by FoxyVpnService.state.collectAsStateWithLifecycle()
-                    Box(Modifier.fillMaxSize()) {
+                    Box(Modifier.fillMaxSize().glassTouchWatch()) {
                         FlameBackdrop(
                             state = backdrop,
                             modifier = Modifier.fillMaxSize(),
@@ -129,7 +137,10 @@ class MainActivity : ComponentActivity() {
                                     ConnectionState.DISCONNECTED -> 0.2f
                                 },
                         )
-                        CompositionLocalProvider(LocalGlassBackdrop provides backdrop) {
+                        CompositionLocalProvider(
+                            LocalGlassBackdrop provides backdrop,
+                            LocalThemeReveal provides reveal,
+                        ) {
                     val navController = rememberNavController()
                     FoxyNavGraph(
                         navController = navController,
@@ -143,6 +154,7 @@ class MainActivity : ComponentActivity() {
                         onSwitchServer = { switchServer() },
                     )
                         }
+                        ThemeRevealOverlay(reveal)
                     }
                 }
             }
