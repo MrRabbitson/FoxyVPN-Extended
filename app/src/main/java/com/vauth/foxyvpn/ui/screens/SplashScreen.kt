@@ -3,7 +3,6 @@ package com.vauth.foxyvpn.ui.screens
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -32,7 +31,6 @@ import com.vauth.foxyvpn.R
 import com.vauth.foxyvpn.data.FxaAuthRepository
 import com.vauth.foxyvpn.data.SessionStatus
 import com.vauth.foxyvpn.ui.components.EmphasizedEasing
-import com.vauth.foxyvpn.ui.components.FlameBackdrop
 import com.vauth.foxyvpn.ui.components.FoxMascot
 import com.vauth.foxyvpn.ui.components.FoxMood
 import com.vauth.foxyvpn.ui.components.GradientText
@@ -77,11 +75,7 @@ fun SplashScreen(
         }
     }
 
-    Box(
-        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
-        contentAlignment = Alignment.Center,
-    ) {
-        FlameBackdrop(Modifier.fillMaxSize(), intensity = 1f)
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             FoxMascot(
                 mood = FoxMood.GUARDING,

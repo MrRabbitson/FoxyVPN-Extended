@@ -1,5 +1,13 @@
 package com.vauth.foxyvpn.ui.screens
 
+import com.vauth.foxyvpn.ui.components.GlassTextButton
+import com.vauth.foxyvpn.ui.components.GlassAlertDialog
+import com.vauth.foxyvpn.ui.components.GlassButton
+import com.vauth.foxyvpn.ui.components.GlassGroup
+import com.vauth.foxyvpn.ui.components.GlassTopBar
+import com.vauth.foxyvpn.ui.components.glassSource
+import com.vauth.foxyvpn.ui.components.rememberGlassSource
+import androidx.compose.ui.res.painterResource
 import android.content.Intent
 import com.vauth.foxyvpn.ui.localizedLabel
 import android.net.Uri
@@ -10,30 +18,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.Logout
 import android.widget.Toast
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -151,14 +147,15 @@ fun SettingsScreen(
 
     if (manualUpdate != null) {
         val release = manualUpdate
-        AlertDialog(
+        GlassAlertDialog(
             onDismissRequest = onDismissUpdateDialog,
             title = { Text(stringResource(R.string.update_dialog_title)) },
             text = {
                 Text(stringResource(R.string.update_notification_text, release.tag))
             },
             confirmButton = {
-                Button(
+                GlassButton(
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
                     onClick = {
                         onDismissUpdateDialog()
                         runCatching {
@@ -180,7 +177,7 @@ fun SettingsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = onDismissUpdateDialog) {
+                GlassTextButton(onClick = onDismissUpdateDialog) {
                     Text(stringResource(R.string.update_dialog_dismiss))
                 }
             },
@@ -347,42 +344,45 @@ fun SettingsScreen(
         )
     }
 
+    val listContent = rememberGlassSource()
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.settings_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.action_back),
-                        )
-                    }
-                },
+            GlassTopBar(
+                title = stringResource(R.string.settings_title),
+                onBack = onBack,
+                over = listContent,
             )
         }
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
+        Column(
+            Modifier.fillMaxSize()
+                .glassSource(listContent)
+                .verticalScroll(rememberScrollState())
+                .padding(padding)
+                .padding(bottom = 24.dp)
+        ) {
             SectionLabel(stringResource(R.string.settings_section_appearance))
+            GlassGroup {
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_language)) },
                 supportingContent = { Text(com.vauth.foxyvpn.ui.settings.languageLabel(appLanguage)) },
                 leadingContent = {
-                    Icon(Icons.Filled.Translate, contentDescription = null)
+                    Icon(painterResource(R.drawable.lucide_languages), contentDescription = null)
                 },
                 trailingContent = {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                    Icon(painterResource(R.drawable.lucide_chevron_right), contentDescription = null)
                 },
                 modifier = Modifier.clickable { showLanguageDialog = true },
             )
 
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            }
             SectionLabel(stringResource(R.string.settings_section_connection))
+            GlassGroup {
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_always_on_vpn)) },
                 supportingContent = { Text(stringResource(R.string.settings_always_on_help)) },
                 trailingContent = {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                    Icon(painterResource(R.drawable.lucide_chevron_right), contentDescription = null)
                 },
                 modifier =
                     Modifier.clickable {
@@ -405,7 +405,7 @@ fun SettingsScreen(
                 headlineContent = { Text(stringResource(R.string.settings_latency_test_url)) },
                 supportingContent = { Text(latencyProbeUrl) },
                 trailingContent = {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                    Icon(painterResource(R.drawable.lucide_chevron_right), contentDescription = null)
                 },
                 modifier = Modifier.clickable { activeDialog = SettingsDialog.LATENCY_PROBE },
             )
@@ -413,13 +413,14 @@ fun SettingsScreen(
                 headlineContent = { Text(stringResource(R.string.settings_tunnel_mtu)) },
                 supportingContent = { Text(mtu.toString()) },
                 trailingContent = {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                    Icon(painterResource(R.drawable.lucide_chevron_right), contentDescription = null)
                 },
                 modifier = Modifier.clickable { activeDialog = SettingsDialog.MTU },
             )
 
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            }
             SectionLabel(stringResource(R.string.settings_section_dns))
+            GlassGroup {
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_dns_provider)) },
                 supportingContent = {
@@ -432,7 +433,7 @@ fun SettingsScreen(
                     Text(subtitle)
                 },
                 trailingContent = {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                    Icon(painterResource(R.drawable.lucide_chevron_right), contentDescription = null)
                 },
                 modifier = Modifier.clickable { activeDialog = SettingsDialog.DNS_PROVIDER },
             )
@@ -448,13 +449,14 @@ fun SettingsScreen(
                     Text(subtitle)
                 },
                 trailingContent = {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                    Icon(painterResource(R.drawable.lucide_chevron_right), contentDescription = null)
                 },
                 modifier = Modifier.clickable { activeDialog = SettingsDialog.BOOTSTRAP_DNS_PROVIDER },
             )
 
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            }
             SectionLabel(stringResource(R.string.settings_section_relayer))
+            GlassGroup {
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_relayer_provider)) },
                 supportingContent = {
@@ -479,7 +481,7 @@ fun SettingsScreen(
                     Text(label)
                 },
                 trailingContent = {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                    Icon(painterResource(R.drawable.lucide_chevron_right), contentDescription = null)
                 },
                 modifier = Modifier.clickable { activeDialog = SettingsDialog.RELAYER_PROVIDER },
             )
@@ -499,13 +501,14 @@ fun SettingsScreen(
                     Text(summary)
                 },
                 trailingContent = {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                    Icon(painterResource(R.drawable.lucide_chevron_right), contentDescription = null)
                 },
                 modifier = Modifier.clickable { activeDialog = SettingsDialog.RELAYER_ENDPOINTS },
             )
 
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            }
             SectionLabel(stringResource(R.string.proxy))
+            GlassGroup {
             SettingsToggle(
                 title = stringResource(R.string.settings_proxy_only_mode),
                 summary = stringResource(R.string.settings_proxy_only_help),
@@ -521,7 +524,7 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
-                TextButton(onClick = proxyViewModel::reload) {
+                GlassTextButton(onClick = proxyViewModel::reload) {
                     Text(stringResource(R.string.retry))
                 }
             }
@@ -540,15 +543,16 @@ fun SettingsScreen(
                     )
                 },
                 trailingContent = {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                    Icon(painterResource(R.drawable.lucide_chevron_right), contentDescription = null)
                 },
                 modifier =
                     Modifier.clickable(enabled = !proxyState.busy && proxyState.summary != null) {
                         proxyViewModel.open(ProxyEditor.LOCAL)
                     },
             )
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            }
             SectionLabel(stringResource(R.string.settings_section_split_tunnel))
+            GlassGroup {
             SettingsToggle(
                 title = stringResource(R.string.settings_bypass_local_network),
                 summary = stringResource(R.string.settings_bypass_local_network_help),
@@ -578,18 +582,19 @@ fun SettingsScreen(
                     )
                 },
                 trailingContent = {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                    Icon(painterResource(R.drawable.lucide_chevron_right), contentDescription = null)
                 },
                 modifier = Modifier.clickable { activeDialog = SettingsDialog.SPLIT_TUNNEL },
             )
 
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            }
             SectionLabel(stringResource(R.string.settings_section_advanced))
+            GlassGroup {
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_custom_edge_address)) },
                 supportingContent = { Text(customEdgeAddress.ifBlank { stringResource(R.string.not_set) }) },
                 trailingContent = {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                    Icon(painterResource(R.drawable.lucide_chevron_right), contentDescription = null)
                 },
                 modifier = Modifier.clickable { activeDialog = SettingsDialog.EDGE_ADDRESS },
             )
@@ -597,7 +602,7 @@ fun SettingsScreen(
                 headlineContent = { Text(stringResource(R.string.settings_transport_protocol)) },
                 supportingContent = { Text(httpVersion.label) },
                 trailingContent = {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                    Icon(painterResource(R.drawable.lucide_chevron_right), contentDescription = null)
                 },
                 modifier = Modifier.clickable { activeDialog = SettingsDialog.HTTP_VERSION },
             )
@@ -623,7 +628,7 @@ fun SettingsScreen(
                     supportingContent = { Text(proxyState.summary?.upstreamType?.name.orEmpty()) },
                     trailingContent = {
                         Icon(
-                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            painterResource(R.drawable.lucide_chevron_right),
                             contentDescription = null,
                         )
                     },
@@ -644,7 +649,7 @@ fun SettingsScreen(
                     },
                     trailingContent = {
                         Icon(
-                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            painterResource(R.drawable.lucide_chevron_right),
                             contentDescription = null,
                         )
                     },
@@ -658,7 +663,7 @@ fun SettingsScreen(
                     supportingContent = { Text(stringResource(R.string.proxy_credentials_help)) },
                     trailingContent = {
                         Icon(
-                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            painterResource(R.drawable.lucide_chevron_right),
                             contentDescription = null,
                         )
                     },
@@ -669,8 +674,9 @@ fun SettingsScreen(
                 )
             }
 
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            }
             SectionLabel(stringResource(R.string.settings_section_anticensorship))
+            GlassGroup {
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_tls_fragmentation)) },
                 supportingContent = {
@@ -687,7 +693,7 @@ fun SettingsScreen(
                     )
                 },
                 trailingContent = {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                    Icon(painterResource(R.drawable.lucide_chevron_right), contentDescription = null)
                 },
                 modifier = Modifier.clickable { activeDialog = SettingsDialog.TLS_FRAGMENT },
             )
@@ -705,7 +711,7 @@ fun SettingsScreen(
                     )
                 },
                 trailingContent = {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                    Icon(painterResource(R.drawable.lucide_chevron_right), contentDescription = null)
                 },
                 modifier = Modifier.clickable { activeDialog = SettingsDialog.UTLS_FINGERPRINT },
             )
@@ -721,7 +727,7 @@ fun SettingsScreen(
                     )
                 },
                 trailingContent = {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                    Icon(painterResource(R.drawable.lucide_chevron_right), contentDescription = null)
                 },
                 modifier = Modifier.clickable { activeDialog = SettingsDialog.CONCURRENCY },
             )
@@ -739,13 +745,14 @@ fun SettingsScreen(
                     )
                 },
                 trailingContent = {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                    Icon(painterResource(R.drawable.lucide_chevron_right), contentDescription = null)
                 },
                 modifier = Modifier.clickable { activeDialog = SettingsDialog.IP_MODE },
             )
 
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            }
             SectionLabel(stringResource(R.string.settings_section_health))
+            GlassGroup {
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_tunnel_health)) },
                 supportingContent = {
@@ -770,13 +777,14 @@ fun SettingsScreen(
                     automaticRecovery = it
                 },
             )
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            }
             SectionLabel(stringResource(R.string.settings_section_about))
+            GlassGroup {
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_view_logs)) },
                 supportingContent = { Text(stringResource(R.string.settings_logs_help)) },
                 trailingContent = {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                    Icon(painterResource(R.drawable.lucide_chevron_right), contentDescription = null)
                 },
                 modifier = Modifier.clickable(onClick = onOpenLogs),
             )
@@ -804,7 +812,7 @@ fun SettingsScreen(
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_source_code)) },
                 supportingContent = { Text(GITHUB_URL) },
-                leadingContent = { Icon(Icons.Filled.Code, contentDescription = null) },
+                leadingContent = { Icon(painterResource(R.drawable.lucide_github), contentDescription = null) },
                 modifier =
                     Modifier.clickable {
                         runCatching {
@@ -823,19 +831,20 @@ fun SettingsScreen(
                     },
             )
 
+            }
+
             if (isSignedIn) {
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                Button(
+                GlassButton(
                     onClick = onSignOut,
                     enabled = !signOutInProgress,
-                    colors =
-                        ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                        ),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.30f),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 16.dp).heightIn(min = 52.dp),
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
+                    Icon(
+                        painterResource(R.drawable.lucide_log_out),
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.settings_sign_out))
                 }
@@ -873,6 +882,6 @@ private fun SectionLabel(text: String) {
         text,
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = Modifier.padding(start = 28.dp, end = 28.dp, top = 20.dp, bottom = 8.dp),
     )
 }

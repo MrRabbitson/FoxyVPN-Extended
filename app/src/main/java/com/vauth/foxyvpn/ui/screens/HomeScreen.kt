@@ -1,5 +1,9 @@
 package com.vauth.foxyvpn.ui.screens
 
+import androidx.compose.foundation.background
+import com.vauth.foxyvpn.ui.components.GlassIconButton
+import com.vauth.foxyvpn.ui.components.GlassRim
+import androidx.compose.ui.res.painterResource
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -16,7 +20,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -37,19 +40,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.BrightnessAuto
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.DataUsage
-import androidx.compose.material.icons.filled.GppMaybe
-import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -66,7 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
@@ -84,7 +75,6 @@ import com.vauth.foxyvpn.data.model.displayName
 import com.vauth.foxyvpn.data.model.emojiFlag
 import com.vauth.foxyvpn.ui.HomeViewModel
 import com.vauth.foxyvpn.ui.components.EmphasizedEasing
-import com.vauth.foxyvpn.ui.components.FlameBackdrop
 import com.vauth.foxyvpn.ui.components.FoxConnectButton
 import com.vauth.foxyvpn.ui.components.FoxMascot
 import com.vauth.foxyvpn.ui.components.FoxMood
@@ -170,16 +160,7 @@ fun HomeScreen(
         }
     }
 
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        FlameBackdrop(
-            modifier = Modifier.fillMaxSize(),
-            intensity =
-                when (state) {
-                    ConnectionState.CONNECTED -> 1f
-                    ConnectionState.CONNECTING -> 0.6f
-                    ConnectionState.DISCONNECTED -> 0f
-                },
-        )
+    Box(Modifier.fillMaxSize()) {
 
         Scaffold(
             containerColor = Color.Transparent,
@@ -207,10 +188,10 @@ fun HomeScreen(
                     actions = {
                         val mode = themeController.mode
                         val showingDark = themeController.resolveDark(systemInDarkTheme)
-                        Box(
+                        GlassSurface(modifier = Modifier.size(44.dp), shape = CircleShape, rim = GlassRim.Vertical) {
+Box(
                             modifier =
-                                Modifier.size(48.dp)
-                                    .clip(CircleShape)
+                                Modifier.fillMaxSize()
                                     .combinedClickable(
                                         role = Role.Button,
                                         onClick = { themeController.toggle(systemInDarkTheme) },
@@ -231,11 +212,11 @@ fun HomeScreen(
                                 label = "theme-icon",
                             ) { current ->
                                 Icon(
-                                    imageVector =
+                                    painter =
                                         when (current) {
-                                            ThemeMode.SYSTEM -> Icons.Filled.BrightnessAuto
-                                            ThemeMode.LIGHT -> Icons.Filled.LightMode
-                                            ThemeMode.DARK -> Icons.Filled.DarkMode
+                                            ThemeMode.SYSTEM -> painterResource(R.drawable.lucide_sun_moon)
+                                            ThemeMode.LIGHT -> painterResource(R.drawable.lucide_sun)
+                                            ThemeMode.DARK -> painterResource(R.drawable.lucide_moon)
                                         },
                                     contentDescription =
                                         when (current) {
@@ -252,9 +233,11 @@ fun HomeScreen(
                                 )
                             }
                         }
-                        IconButton(onClick = onOpenSettings) {
+}
+                        Spacer(Modifier.width(8.dp))
+                        GlassIconButton(onClick = onOpenSettings, modifier = Modifier.padding(end = 8.dp)) {
                             Icon(
-                                imageVector = Icons.Filled.Settings,
+                                painter = painterResource(R.drawable.lucide_settings),
                                 contentDescription = stringResource(R.string.settings_title),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -392,7 +375,7 @@ fun HomeScreen(
                                         Text(flag, style = MaterialTheme.typography.titleLarge)
                                     } else {
                                         Icon(
-                                            imageVector = Icons.Filled.Public,
+                                            painter = painterResource(R.drawable.lucide_globe),
                                             contentDescription = null,
                                             tint = MaterialTheme.colorScheme.primary,
                                         )
@@ -440,7 +423,7 @@ fun HomeScreen(
                                     }
                                 }
                                 Icon(
-                                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                    painterResource(R.drawable.lucide_chevron_right),
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -484,7 +467,7 @@ fun HomeScreen(
                                         label = "shield-icon",
                                     ) { isProtected ->
                                         Icon(
-                                            if (isProtected) Icons.Filled.VerifiedUser else Icons.Filled.GppMaybe,
+                                            if (isProtected) painterResource(R.drawable.lucide_shield_check) else painterResource(R.drawable.lucide_shield_alert),
                                             contentDescription = null,
                                             tint = badgeColor,
                                         )
@@ -544,14 +527,14 @@ fun HomeScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     StatTile(
-                                        icon = Icons.Filled.DataUsage,
+                                        icon = painterResource(R.drawable.lucide_arrow_down_up),
                                         label = stringResource(R.string.home_data_used),
                                         value = formatBytes(if (isConnected) liveStats.sessionBytes else 0L),
                                         modifier = Modifier.weight(1f),
                                     )
                                     val currentPing = if (isConnected) pingLatency else null
                                     StatTile(
-                                        icon = Icons.Filled.Speed,
+                                        icon = painterResource(R.drawable.lucide_gauge),
                                         label = stringResource(R.string.home_latency),
                                         value =
                                             when {
@@ -640,7 +623,7 @@ fun HomeScreen(
 
 @Composable
 private fun StatTile(
-    icon: ImageVector,
+    icon: Painter,
     label: String,
     value: String,
     modifier: Modifier = Modifier,

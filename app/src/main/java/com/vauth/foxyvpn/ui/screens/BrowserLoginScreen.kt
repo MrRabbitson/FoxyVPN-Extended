@@ -1,5 +1,6 @@
 package com.vauth.foxyvpn.ui.screens
 
+import androidx.compose.ui.res.painterResource
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
@@ -19,8 +20,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -218,7 +217,7 @@ fun BrowserLoginScreen(
                 },
             ) {
                 Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
+                    painterResource(R.drawable.lucide_arrow_left),
                     contentDescription = stringResource(R.string.action_back),
                 )
             }

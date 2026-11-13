@@ -1,5 +1,18 @@
 package com.vauth.foxyvpn.ui.screens
 
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import com.vauth.foxyvpn.data.model.ProxyCandidate
+import com.vauth.foxyvpn.ui.components.GlassSurface
+import com.vauth.foxyvpn.ui.components.GlassTopBar
+import com.vauth.foxyvpn.ui.components.glassSource
+import com.vauth.foxyvpn.ui.components.rememberGlassSource
+import com.vauth.foxyvpn.ui.components.GlassTextButton
+import androidx.compose.ui.res.painterResource
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -9,24 +22,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -54,13 +59,12 @@ import com.vauth.foxyvpn.ui.ServerListViewModel
 import com.vauth.foxyvpn.ui.ServerPingState
 import com.vauth.foxyvpn.ui.theme.LocalFoxyStatusColors
 
-private sealed class LocationRow {
-    data class RecommendedRow(val country: VpnCountry) : LocationRow()
-
-    data class CountryHeader(val country: VpnCountry, val name: String, val pingMs: Int?) : LocationRow()
-
-    data class CityRow(val country: VpnCountry, val city: VpnCity) : LocationRow()
-}
+private data class CountryGroup(
+    val country: VpnCountry,
+    val name: String,
+    val pingMs: Int?,
+    val cities: List<VpnCity>,
+)
 
 /** Countries that answered sort first, still-measuring ones next, unreachable ones last. */
 private const val RANK_MEASURED = 0
@@ -78,7 +82,7 @@ fun ServerListScreen(
     val countries = state.countries
     val isLoading = state.isLoading
     val errorMessage = state.errorMessage
-    val selectedState by proxyStateStore.selectedProxyFlow.collectAsStateWithLifecycle()
+    val selected by proxyStateStore.selectedProxyFlow.collectAsStateWithLifecycle()
     val snackbarHost = remember { SnackbarHostState() }
     val context = LocalContext.current
     val locale = LocalConfiguration.current.locales[0]
@@ -92,7 +96,8 @@ fun ServerListScreen(
         }
     }
 
-    val rows =
+    val recommended = remember(countries) { countries.firstOrNull { it.code == RECOMMENDED_COUNTRY_CODE } }
+    val groups =
         remember(countries, state.pingResults, state.pingStates, locale, recommendedLabel) {
             fun cityPing(country: VpnCountry, city: VpnCity): Int? =
                 state.pingResults["${country.code}:${city.code}"]
@@ -109,65 +114,47 @@ fun ServerListScreen(
                     else -> RANK_PENDING
                 }
 
-            val names =
-                countries.associate {
-                    it.code to localizedCountryName(it.code, it.name, locale, recommendedLabel)
+            countries
+                .filter { it.code != RECOMMENDED_COUNTRY_CODE }
+                .map { country ->
+                    CountryGroup(
+                        country = country,
+                        name = localizedCountryName(country.code, country.name, locale, recommendedLabel),
+                        pingMs = countryPing(country),
+                        cities =
+                            country.cities.sortedWith(
+                                compareBy<VpnCity>(
+                                    { cityPing(country, it) ?: Int.MAX_VALUE },
+                                    { it.name.ifBlank { it.code } },
+                                )
+                            ),
+                    )
                 }
-            val ordered =
-                countries.sortedWith(
-                    compareBy<VpnCountry>(
-                        { it.code != RECOMMENDED_COUNTRY_CODE },
-                        { countryRank(it) },
-                        { countryPing(it) ?: Int.MAX_VALUE },
-                        { names[it.code].orEmpty() },
+                .sortedWith(
+                    compareBy<CountryGroup>(
+                        { countryRank(it.country) },
+                        { it.pingMs ?: Int.MAX_VALUE },
+                        { it.name },
                     )
                 )
-            buildList {
-                for (country in ordered) {
-                    if (country.code == RECOMMENDED_COUNTRY_CODE) {
-                        add(LocationRow.RecommendedRow(country))
-                        continue
-                    }
-                    add(
-                        LocationRow.CountryHeader(
-                            country = country,
-                            name = names[country.code].orEmpty(),
-                            pingMs = countryPing(country),
-                        )
-                    )
-                    country.cities
-                        .sortedWith(
-                            compareBy<VpnCity>(
-                                { cityPing(country, it) ?: Int.MAX_VALUE },
-                                { it.name.ifBlank { it.code } },
-                            )
-                        )
-                        .forEach { add(LocationRow.CityRow(country, it)) }
-                }
-            }
         }
 
-    // Rows glide to their new place as measurements come in instead of jumping.
+    // Cards glide to their new place as measurements come in instead of jumping.
     val reorder =
         spring<IntOffset>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+    val listContent = rememberGlassSource()
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHost) },
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.server_list_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.action_back),
-                        )
-                    }
-                },
+            GlassTopBar(
+                title = stringResource(R.string.server_list_title),
+                onBack = onBack,
+                over = listContent,
             )
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Box(Modifier.fillMaxSize()) {
             when {
                 isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 errorMessage != null && countries.isEmpty() ->
@@ -180,42 +167,52 @@ fun ServerListScreen(
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.error,
                         )
-                        TextButton(onClick = { viewModel.loadServerList(force = true) }) {
+                        Spacer(Modifier.height(12.dp))
+                        GlassTextButton(onClick = { viewModel.loadServerList(force = true) }) {
                             Text(stringResource(R.string.retry))
                         }
                     }
                 else ->
-                    LazyColumn(Modifier.selectableGroup()) {
-                        items(
-                            rows,
-                            key = { row ->
-                                when (row) {
-                                    is LocationRow.RecommendedRow -> "recommended:${row.country.code}"
-                                    is LocationRow.CountryHeader -> "country:${row.country.code}"
-                                    is LocationRow.CityRow -> "city:${row.country.code}:${row.city.code}"
-                                }
-                            },
-                            contentType = { row ->
-                                when (row) {
-                                    is LocationRow.RecommendedRow -> 0
-                                    is LocationRow.CountryHeader -> 1
-                                    is LocationRow.CityRow -> 2
-                                }
-                            },
-                        ) { row ->
-                            val selected = selectedState
-                            val itemModifier =
-                                Modifier.animateItem(
-                                    fadeInSpec = null,
-                                    fadeOutSpec = null,
-                                    placementSpec = reorder,
-                                )
-                            when (row) {
-                                is LocationRow.RecommendedRow ->
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize().glassSource(listContent).selectableGroup(),
+                        contentPadding =
+                            PaddingValues(
+                                start = 12.dp,
+                                end = 12.dp,
+                                top = padding.calculateTopPadding() + 4.dp,
+                                bottom = padding.calculateBottomPadding() + 24.dp,
+                            ),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        if (recommended != null) {
+                            item(key = "recommended", contentType = 0) {
+                                val isSelected = recommended.code == selected?.countryCode
+                                GlassSurface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onClick = {
+                                                    val chosen =
+                                                        ServerListClient.candidatesForCountry(
+                                                                countries,
+                                                                recommended.code,
+                                                            )
+                                                            .randomOrNull()
+                                                    if (chosen != null) {
+                                                        viewModel.selectCandidate(chosen)
+                                                        onServerSelected()
+                                                    } else {
+                                                        viewModel.setErrorMessage(
+                                                            context.getString(
+                                                                R.string.server_list_no_servers_country,
+                                                                recommendedLabel,
+                                                            )
+                                                        )
+                                                    }
+                                                },
+                                ) {
                                     ListItem(
                                         leadingContent = {
                                             Icon(
-                                                Icons.Filled.Public,
+                                                painterResource(R.drawable.lucide_globe),
                                                 contentDescription = null,
                                                 tint = MaterialTheme.colorScheme.primary,
                                             )
@@ -229,132 +226,51 @@ fun ServerListScreen(
                                         supportingContent = {
                                             Text(stringResource(R.string.server_list_recommended_desc))
                                         },
-                                        trailingContent = {
-                                            if (row.country.code == selected?.countryCode) {
-                                                Icon(
-                                                    Icons.Filled.CheckCircle,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                )
-                                            }
-                                        },
-                                        modifier =
-                                            itemModifier
-                                                .padding(horizontal = 8.dp)
-                                                .selectable(
-                                                    selected = row.country.code == selected?.countryCode,
-                                                    role = Role.RadioButton,
-                                                    onClick = {
-                                                        val chosen =
-                                                            ServerListClient.candidatesForCountry(
-                                                                    countries,
-                                                                    row.country.code,
-                                                                )
-                                                                .randomOrNull()
-                                                        if (chosen != null) {
-                                                            viewModel.selectCandidate(chosen)
-                                                            onServerSelected()
-                                                        } else {
-                                                            viewModel.setErrorMessage(
-                                                                context.getString(
-                                                                    R.string.server_list_no_servers_country,
-                                                                    recommendedLabel,
-                                                                )
-                                                            )
-                                                        }
-                                                    },
-                                                ),
+                                        trailingContent = { if (isSelected) SelectedMark() },
                                     )
-                                is LocationRow.CountryHeader ->
+                                }
+                            }
+                        }
+                        items(groups, key = { "country:${it.country.code}" }, contentType = { 1 }) { group ->
+                            GlassSurface(
+                                modifier =
+                                    Modifier.fillMaxWidth()
+                                        .animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = reorder)
+                            ) {
+                                Column(Modifier.padding(vertical = 4.dp)) {
                                     ListItem(
                                         leadingContent = {
                                             Text(
-                                                text = row.country.emojiFlag,
+                                                text = group.country.emojiFlag,
                                                 style = MaterialTheme.typography.titleLarge,
                                             )
                                         },
-                                        headlineContent = {
-                                            Text(row.name, fontWeight = FontWeight.SemiBold)
-                                        },
-                                        trailingContent = { PingLabel(row.pingMs) },
-                                        modifier = itemModifier.padding(horizontal = 8.dp),
+                                        headlineContent = { Text(group.name, fontWeight = FontWeight.SemiBold) },
+                                        trailingContent = { PingLabel(group.pingMs) },
                                     )
-                                is LocationRow.CityRow -> {
-                                    val city = row.city
-                                    val cityName = city.name.ifBlank { city.code }
-                                    val available =
-                                        remember(countries, row.country.code, city.code) {
-                                            ServerListClient.candidatesForCity(
-                                                countries,
-                                                row.country.code,
-                                                city.code,
-                                            )
-                                        }
-                                    val serverCount = available.size
-                                    val pingKey = "${row.country.code}:${city.code}"
-                                    val pingMs = state.pingResults[pingKey]
-                                    val pingState = state.pingStates[pingKey] ?: ServerPingState.PENDING
-                                    val isSelected =
-                                        row.country.code == selected?.countryCode &&
-                                            city.code == selected?.cityCode
-
-                                    ListItem(
-                                        headlineContent = { Text(cityName) },
-                                        supportingContent = {
-                                            val primaryHostname = available.firstOrNull()?.host
-                                            val serverLabel =
-                                                when {
-                                                    primaryHostname == null ->
-                                                        stringResource(R.string.server_list_no_servers_available)
-                                                    serverCount > 1 ->
-                                                        stringResource(
-                                                            R.string.server_list_more_servers,
-                                                            primaryHostname,
-                                                            serverCount - 1,
-                                                        )
-                                                    else -> primaryHostname
-                                                }
-                                            val pingLabel =
-                                                when {
-                                                    pingMs != null ->
-                                                        stringResource(R.string.server_list_tcp_ms, pingMs)
-                                                    pingState == ServerPingState.FAILED ->
-                                                        stringResource(R.string.server_list_tcp_unavailable)
-                                                    else -> stringResource(R.string.server_list_checking_tcp)
-                                                }
-                                            Text("$serverLabel • $pingLabel")
-                                        },
-                                        trailingContent = {
-                                            if (isSelected) {
-                                                Icon(
-                                                    Icons.Filled.CheckCircle,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary,
+                                    for (city in group.cities) {
+                                        CityRow(
+                                            country = group.country,
+                                            city = city,
+                                            countries = countries,
+                                            pingMs = state.pingResults["${group.country.code}:${city.code}"],
+                                            pingState =
+                                                state.pingStates["${group.country.code}:${city.code}"]
+                                                    ?: ServerPingState.PENDING,
+                                            isSelected =
+                                                group.country.code == selected?.countryCode &&
+                                                    city.code == selected?.cityCode,
+                                            onChosen = { chosen ->
+                                                viewModel.selectCandidate(chosen)
+                                                onServerSelected()
+                                            },
+                                            onUnavailable = { cityName ->
+                                                viewModel.setErrorMessage(
+                                                    context.getString(R.string.server_list_no_servers_city, cityName)
                                                 )
-                                            }
-                                        },
-                                        modifier =
-                                            itemModifier
-                                                .padding(start = 24.dp, end = 8.dp)
-                                                .selectable(
-                                                    selected = isSelected,
-                                                    role = Role.RadioButton,
-                                                    onClick = {
-                                                        val chosen = available.randomOrNull()
-                                                        if (chosen != null) {
-                                                            viewModel.selectCandidate(chosen)
-                                                            onServerSelected()
-                                                        } else {
-                                                            viewModel.setErrorMessage(
-                                                                context.getString(
-                                                                    R.string.server_list_no_servers_city,
-                                                                    cityName,
-                                                                )
-                                                            )
-                                                        }
-                                                    },
-                                                ),
-                                    )
+                                            },
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -362,6 +278,64 @@ fun ServerListScreen(
             }
         }
     }
+}
+
+@Composable
+private fun CityRow(
+    country: VpnCountry,
+    city: VpnCity,
+    countries: List<VpnCountry>,
+    pingMs: Int?,
+    pingState: ServerPingState,
+    isSelected: Boolean,
+    onChosen: (ProxyCandidate) -> Unit,
+    onUnavailable: (String) -> Unit,
+) {
+    val cityName = city.name.ifBlank { city.code }
+    val available =
+        remember(countries, country.code, city.code) {
+            ServerListClient.candidatesForCity(countries, country.code, city.code)
+        }
+    ListItem(
+        headlineContent = { Text(cityName) },
+        supportingContent = {
+            val primaryHostname = available.firstOrNull()?.host
+            val serverLabel =
+                when {
+                    primaryHostname == null -> stringResource(R.string.server_list_no_servers_available)
+                    available.size > 1 ->
+                        stringResource(R.string.server_list_more_servers, primaryHostname, available.size - 1)
+                    else -> primaryHostname
+                }
+            val pingLabel =
+                when {
+                    pingMs != null -> stringResource(R.string.server_list_tcp_ms, pingMs)
+                    pingState == ServerPingState.FAILED -> stringResource(R.string.server_list_tcp_unavailable)
+                    else -> stringResource(R.string.server_list_checking_tcp)
+                }
+            Text("$serverLabel \u2022 $pingLabel")
+        },
+        trailingContent = { if (isSelected) SelectedMark() },
+        modifier =
+            Modifier.padding(start = 16.dp)
+                .selectable(
+                    selected = isSelected,
+                    role = Role.RadioButton,
+                    onClick = {
+                        val chosen = available.randomOrNull()
+                        if (chosen != null) onChosen(chosen) else onUnavailable(cityName)
+                    },
+                ),
+    )
+}
+
+@Composable
+private fun SelectedMark() {
+    Icon(
+        painterResource(R.drawable.lucide_circle_check),
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.primary,
+    )
 }
 
 /** Best latency of a country, tinted by how good it is. */

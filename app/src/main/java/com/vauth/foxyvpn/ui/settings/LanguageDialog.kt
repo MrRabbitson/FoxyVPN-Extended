@@ -1,5 +1,7 @@
 package com.vauth.foxyvpn.ui.settings
 
+import com.vauth.foxyvpn.ui.components.GlassTextButton
+import com.vauth.foxyvpn.ui.components.GlassAlertDialog
 import android.app.Activity
 import android.app.LocaleManager
 import android.content.Context
@@ -13,10 +15,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -91,7 +91,7 @@ fun LanguagePickerDialog(
     onConfirm: (String) -> Unit,
 ) {
     var selected by remember { mutableStateOf(current) }
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_language)) },
         text = {
@@ -116,10 +116,10 @@ fun LanguagePickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(selected) }) { Text(stringResource(R.string.save)) }
+            GlassTextButton(onClick = { onConfirm(selected) }) { Text(stringResource(R.string.save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            GlassTextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         },
     )
 }

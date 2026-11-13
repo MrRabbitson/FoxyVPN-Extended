@@ -1,5 +1,8 @@
 package com.vauth.foxyvpn.ui.settings
 
+import com.vauth.foxyvpn.ui.components.GlassTextButton
+import com.vauth.foxyvpn.ui.components.GlassAlertDialog
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,9 +15,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -23,7 +23,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -99,7 +98,7 @@ internal fun SplitTunnelDialog(
         remember(installedApps, searchQuery, showSystemApps, selected) {
             filterInstalledApps(installedApps, searchQuery, showSystemApps, selected)
         }
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_split_tunneling)) },
         text = {
@@ -152,7 +151,7 @@ internal fun SplitTunnelDialog(
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.labelMedium,
                         )
-                        TextButton(
+                        GlassTextButton(
                             onClick = {
                                 if (mode == SettingsStore.SplitTunnelMode.INCLUDE)
                                     included = emptySet()
@@ -183,7 +182,7 @@ internal fun SplitTunnelDialog(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
                         label = { Text(stringResource(R.string.settings_search_apps)) },
-                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                        leadingIcon = { Icon(painterResource(R.drawable.lucide_search), contentDescription = null) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
@@ -198,7 +197,7 @@ internal fun SplitTunnelDialog(
                                 stringResource(R.string.settings_apps_load_failed),
                                 color = MaterialTheme.colorScheme.error,
                             )
-                            TextButton(onClick = { loadAttempt++ }) {
+                            GlassTextButton(onClick = { loadAttempt++ }) {
                                 Text(stringResource(R.string.retry))
                             }
                         }
@@ -251,7 +250,7 @@ internal fun SplitTunnelDialog(
             }
         },
         confirmButton = {
-            TextButton(
+            GlassTextButton(
                 enabled =
                     appList is AppListState.Ready &&
                         (mode != SettingsStore.SplitTunnelMode.INCLUDE || included.isNotEmpty()),
@@ -261,7 +260,7 @@ internal fun SplitTunnelDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            GlassTextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         },
     )
 }

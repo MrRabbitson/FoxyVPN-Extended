@@ -1,5 +1,7 @@
 package com.vauth.foxyvpn.ui.settings
 
+import com.vauth.foxyvpn.ui.components.GlassTextButton
+import com.vauth.foxyvpn.ui.components.GlassAlertDialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,14 +14,12 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,7 +62,7 @@ internal fun ProxySettingsDialog(
                 onSaveUpstream,
             )
         else ->
-            AlertDialog(
+            GlassAlertDialog(
                 onDismissRequest = { if (!state.busy) onDismiss() },
                 title = {
                     Text(
@@ -77,12 +77,12 @@ internal fun ProxySettingsDialog(
                     else Text(errorMessage.orEmpty(), color = MaterialTheme.colorScheme.error)
                 },
                 confirmButton = {
-                    TextButton(enabled = !state.busy, onClick = { onRetry(editor) }) {
+                    GlassTextButton(enabled = !state.busy, onClick = { onRetry(editor) }) {
                         Text(stringResource(R.string.retry))
                     }
                 },
                 dismissButton = {
-                    TextButton(enabled = !state.busy, onClick = onDismiss) {
+                    GlassTextButton(enabled = !state.busy, onClick = onDismiss) {
                         Text(stringResource(R.string.cancel))
                     }
                 },
@@ -305,7 +305,7 @@ private fun ProxyEditorDialog(
     onSave: () -> Unit,
     content: @Composable () -> Unit,
 ) {
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text(title) },
         text = {
@@ -319,12 +319,12 @@ private fun ProxyEditorDialog(
             }
         },
         confirmButton = {
-            TextButton(enabled = valid && !busy, onClick = onSave) {
+            GlassTextButton(enabled = valid && !busy, onClick = onSave) {
                 Text(stringResource(R.string.save))
             }
         },
         dismissButton = {
-            TextButton(enabled = !busy, onClick = onDismiss) {
+            GlassTextButton(enabled = !busy, onClick = onDismiss) {
                 Text(stringResource(R.string.cancel))
             }
         },

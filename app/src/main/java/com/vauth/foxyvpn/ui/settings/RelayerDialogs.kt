@@ -1,5 +1,7 @@
 package com.vauth.foxyvpn.ui.settings
 
+import com.vauth.foxyvpn.ui.components.GlassTextButton
+import com.vauth.foxyvpn.ui.components.GlassAlertDialog
 import android.util.Base64
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,14 +17,12 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -173,7 +173,7 @@ internal fun RelayerProviderPickerDialog(
         )
     )
 
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_relayer_provider)) },
         text = {
@@ -241,9 +241,9 @@ internal fun RelayerProviderPickerDialog(
                         }
                     }
                 }
-                TextButton(
+                GlassTextButton(
                     onClick = {
-                        if (isTesting) return@TextButton
+                        if (isTesting) return@GlassTextButton
                         isTesting = true
                         coroutineScope.launch {
                             val initial = mutableMapOf<String, RelayerProbeState>()
@@ -321,7 +321,7 @@ internal fun RelayerProviderPickerDialog(
             }
         },
         confirmButton = {
-            TextButton(
+            GlassTextButton(
                 onClick = { onConfirm(selectedProvider, urlText) },
                 enabled = canSave,
             ) {
@@ -329,7 +329,7 @@ internal fun RelayerProviderPickerDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            GlassTextButton(onClick = onDismiss) {
                 Text(stringResource(R.string.cancel))
             }
         },
@@ -375,7 +375,7 @@ internal fun RelayedEndpointsDialog(
         mutableStateOf(currentEndpoints)
     }
 
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_relayer_endpoints)) },
         text = {
@@ -419,12 +419,12 @@ internal fun RelayedEndpointsDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(selected) }) {
+            GlassTextButton(onClick = { onConfirm(selected) }) {
                 Text(stringResource(R.string.save))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            GlassTextButton(onClick = onDismiss) {
                 Text(stringResource(R.string.cancel))
             }
         },

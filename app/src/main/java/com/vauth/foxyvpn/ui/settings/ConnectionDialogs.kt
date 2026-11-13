@@ -1,5 +1,7 @@
 package com.vauth.foxyvpn.ui.settings
 
+import com.vauth.foxyvpn.ui.components.GlassTextButton
+import com.vauth.foxyvpn.ui.components.GlassAlertDialog
 import androidx.compose.foundation.layout.Arrangement
 import com.vauth.foxyvpn.ui.localizedDescription
 import com.vauth.foxyvpn.ui.localizedLabel
@@ -15,12 +17,10 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -62,7 +62,7 @@ internal fun DnsProviderPickerDialog(
     val isValidCustomUrl = SettingsStore.isValidDohUrl(urlText)
     val canSave = !isCustom || isValidCustomUrl
 
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
@@ -127,12 +127,12 @@ internal fun DnsProviderPickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(selectedProvider, urlText) }, enabled = canSave) {
+            GlassTextButton(onClick = { onConfirm(selectedProvider, urlText) }, enabled = canSave) {
                 Text(stringResource(R.string.save))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            GlassTextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         },
     )
 }
@@ -147,7 +147,7 @@ internal fun CustomEdgeAddressDialog(
     val trimmed = value.trim()
     val isValid = trimmed.isEmpty() || SettingsStore.isValidEdgeHost(trimmed)
 
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_custom_edge_address)) },
         text = {
@@ -174,12 +174,12 @@ internal fun CustomEdgeAddressDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(trimmed) }, enabled = isValid) {
+            GlassTextButton(onClick = { onConfirm(trimmed) }, enabled = isValid) {
                 Text(stringResource(R.string.save))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            GlassTextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         },
     )
 }
@@ -191,7 +191,7 @@ internal fun HttpVersionPickerDialog(
     onConfirm: (SettingsStore.HttpVersion) -> Unit,
 ) {
     var selected by rememberSaveable { mutableStateOf(current) }
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_transport_protocol)) },
         text = {
@@ -229,10 +229,10 @@ internal fun HttpVersionPickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(selected) }) { Text(stringResource(R.string.save)) }
+            GlassTextButton(onClick = { onConfirm(selected) }) { Text(stringResource(R.string.save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            GlassTextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         },
     )
 }
@@ -244,7 +244,7 @@ internal fun IpModePickerDialog(
     onConfirm: (SettingsStore.IpMode) -> Unit,
 ) {
     var selected by rememberSaveable { mutableStateOf(current) }
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_ip_mode)) },
         text = {
@@ -286,10 +286,10 @@ internal fun IpModePickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(selected) }) { Text(stringResource(R.string.save)) }
+            GlassTextButton(onClick = { onConfirm(selected) }) { Text(stringResource(R.string.save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            GlassTextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         },
     )
 }
@@ -305,7 +305,7 @@ internal fun MtuPickerDialog(
     val parsedMtu = mtuText.toIntOrNull()
     val isValid = parsedMtu != null && parsedMtu in minimum..SettingsStore.MAX_MTU
 
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_tunnel_mtu)) },
         text = {
@@ -325,7 +325,7 @@ internal fun MtuPickerDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                TextButton(
+                GlassTextButton(
                     onClick = { mtuText = SettingsStore.DEFAULT_MTU.toString() },
                     modifier = Modifier.align(Alignment.End),
                 ) {
@@ -334,12 +334,12 @@ internal fun MtuPickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { parsedMtu?.let { onConfirm(it) } }, enabled = isValid) {
+            GlassTextButton(onClick = { parsedMtu?.let { onConfirm(it) } }, enabled = isValid) {
                 Text(stringResource(R.string.save))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            GlassTextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         },
     )
 }
@@ -356,7 +356,7 @@ internal fun TlsFragmentPickerDialog(
     val parsedDelay = delayText.toIntOrNull()
     val isValidDelay = parsedDelay != null && parsedDelay in 50..2000
 
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_tls_fragmentation)) },
         text = {
@@ -409,7 +409,7 @@ internal fun TlsFragmentPickerDialog(
             }
         },
         confirmButton = {
-            TextButton(
+            GlassTextButton(
                 onClick = {
                     onConfirm(
                         selectedMode,
@@ -425,7 +425,7 @@ internal fun TlsFragmentPickerDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            GlassTextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         },
     )
 }
@@ -438,7 +438,7 @@ internal fun UtlsFingerprintPickerDialog(
 ) {
     var selected by rememberSaveable { mutableStateOf(current) }
 
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_browser_tls_fingerprint)) },
         text = {
@@ -469,10 +469,10 @@ internal fun UtlsFingerprintPickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(selected) }) { Text(stringResource(R.string.save)) }
+            GlassTextButton(onClick = { onConfirm(selected) }) { Text(stringResource(R.string.save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            GlassTextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         },
     )
 }
@@ -486,7 +486,7 @@ internal fun ConcurrencyPickerDialog(
     val options = listOf(8, 16, 32, 64)
     var selected by rememberSaveable { mutableIntStateOf(current) }
 
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_multiplex_concurrency)) },
         text = {
@@ -518,10 +518,10 @@ internal fun ConcurrencyPickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(selected) }) { Text(stringResource(R.string.save)) }
+            GlassTextButton(onClick = { onConfirm(selected) }) { Text(stringResource(R.string.save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            GlassTextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         },
     )
 }
@@ -534,7 +534,7 @@ internal fun LatencyProbeDialog(
 ) {
     var url by rememberSaveable(stateSaver = NetworkDraftSaver) { mutableStateOf(current) }
     val valid = SettingsStore.isValidProbeUrl(url.trim())
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_latency_test_url)) },
         text = {
@@ -556,18 +556,18 @@ internal fun LatencyProbeDialog(
                     singleLine = true,
                     isError = !valid,
                 )
-                TextButton(onClick = { url = SettingsStore.DEFAULT_LATENCY_PROBE_URL }) {
+                GlassTextButton(onClick = { url = SettingsStore.DEFAULT_LATENCY_PROBE_URL }) {
                     Text(stringResource(R.string.settings_reset))
                 }
             }
         },
         confirmButton = {
-            TextButton(enabled = valid, onClick = { onConfirm(url.trim()) }) {
+            GlassTextButton(enabled = valid, onClick = { onConfirm(url.trim()) }) {
                 Text(stringResource(R.string.save))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            GlassTextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         },
     )
 }

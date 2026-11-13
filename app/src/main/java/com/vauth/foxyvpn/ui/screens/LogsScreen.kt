@@ -1,5 +1,21 @@
 package com.vauth.foxyvpn.ui.screens
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import com.vauth.foxyvpn.ui.components.GlassButton
+import com.vauth.foxyvpn.ui.components.GlassSurface
+import com.vauth.foxyvpn.ui.components.GlassTopBar
+import com.vauth.foxyvpn.ui.components.glassSource
+import com.vauth.foxyvpn.ui.components.rememberGlassSource
+import androidx.compose.ui.res.painterResource
 import android.widget.Toast
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -11,18 +27,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -95,73 +103,59 @@ fun LogsScreen(
             }
         }
 
+    val listContent = rememberGlassSource()
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        if (visible.size == entries.size) {
-                            stringResource(R.string.logs_title_all, entries.size)
-                        } else {
-                            stringResource(R.string.logs_title_filtered, visible.size, entries.size)
-                        }
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.action_back),
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(
-                        enabled = !state.isExporting && entries.isNotEmpty(),
-                        onClick = { viewModel.exportLogs(context, chooserTitle) },
-                    ) {
-                        Icon(
-                            Icons.Filled.Share,
-                            contentDescription = stringResource(R.string.logs_action_share),
-                        )
-                    }
-                    IconButton(
-                        enabled = !state.isExporting && entries.isNotEmpty(),
-                        onClick = { viewModel.copyLogs(context) },
-                    ) {
-                        Icon(
-                            Icons.Filled.ContentCopy,
-                            contentDescription = stringResource(R.string.logs_action_copy),
-                        )
-                    }
-                    IconButton(
-                        enabled = entries.isNotEmpty(),
-                        onClick = { viewModel.clearLogs() },
-                    ) {
-                        Icon(
-                            Icons.Filled.DeleteSweep,
-                            contentDescription = stringResource(R.string.logs_action_clear),
-                        )
-                    }
-                },
-            )
+            GlassTopBar(
+                title =
+                    if (visible.size == entries.size) {
+                        stringResource(R.string.logs_title_all, entries.size)
+                    } else {
+                        stringResource(R.string.logs_title_filtered, visible.size, entries.size)
+                    },
+                onBack = onBack,
+                over = listContent,
+            ) {
+                BarAction(
+                    icon = R.drawable.lucide_share_2,
+                    label = stringResource(R.string.logs_action_share),
+                    enabled = !state.isExporting && entries.isNotEmpty(),
+                    onClick = { viewModel.exportLogs(context, chooserTitle) },
+                )
+                BarAction(
+                    icon = R.drawable.lucide_copy,
+                    label = stringResource(R.string.logs_action_copy),
+                    enabled = !state.isExporting && entries.isNotEmpty(),
+                    onClick = { viewModel.copyLogs(context) },
+                )
+                BarAction(
+                    icon = R.drawable.lucide_trash_2,
+                    label = stringResource(R.string.logs_action_clear),
+                    enabled = entries.isNotEmpty(),
+                    onClick = { viewModel.clearLogs() },
+                )
+            }
         }
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
+        Column(Modifier.fillMaxSize().padding(top = padding.calculateTopPadding())) {
             Row(
                 modifier =
                     Modifier.fillMaxWidth()
                         .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 for (option in LogFilter.entries) {
                     val count = countsByFilter[option] ?: 0
-                    FilterChip(
-                        selected = state.filter == option,
+                    val active = state.filter == option
+                    GlassButton(
                         onClick = { viewModel.setFilter(option) },
-                        label = { Text("${option.label()} ($count)") },
-                    )
+                        tint =
+                            if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.38f)
+                            else Color.Unspecified,
+                    ) {
+                        Text("${option.label()} ($count)")
+                    }
                 }
             }
 
@@ -181,7 +175,10 @@ fun LogsScreen(
                     )
                 }
             } else {
-                LazyColumn(Modifier.fillMaxSize()) {
+                GlassSurface(
+                    Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 16.dp)
+                ) {
+                LazyColumn(Modifier.fillMaxSize().glassSource(listContent), contentPadding = PaddingValues(vertical = 8.dp)) {
                     items(visible.asReversed(), key = { it.id }) { entry ->
                         val color =
                             when (entry.level) {
@@ -201,7 +198,21 @@ fun LogsScreen(
                         }
                     }
                 }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun BarAction(icon: Int, label: String, enabled: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.size(44.dp)
+            .clip(CircleShape)
+            .alpha(if (enabled) 1f else 0.4f)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(painterResource(icon), contentDescription = label, modifier = Modifier.size(21.dp))
     }
 }

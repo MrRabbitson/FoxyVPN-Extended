@@ -1,7 +1,11 @@
 package com.vauth.foxyvpn.ui.screens
 
+import com.vauth.foxyvpn.ui.components.GlassIconButton
+import com.vauth.foxyvpn.ui.components.GlassRim
+import com.vauth.foxyvpn.ui.components.GlassSurface
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -19,13 +23,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BrightnessAuto
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -50,7 +48,6 @@ import com.vauth.foxyvpn.R
 import com.vauth.foxyvpn.data.FxaAuthRepository
 import com.vauth.foxyvpn.data.ThemeMode
 import com.vauth.foxyvpn.ui.LoginViewModel
-import com.vauth.foxyvpn.ui.components.FlameBackdrop
 import com.vauth.foxyvpn.ui.components.FlameButton
 import com.vauth.foxyvpn.ui.components.FoxMascot
 import com.vauth.foxyvpn.ui.components.FoxMood
@@ -90,8 +87,7 @@ fun LoginScreen(
         return
     }
 
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-    FlameBackdrop(Modifier.fillMaxSize(), intensity = 0.7f)
+    Box(Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
@@ -102,10 +98,10 @@ fun LoginScreen(
                     if (themeController != null) {
                         val mode = themeController.mode
                         val showingDark = themeController.resolveDark(systemInDarkTheme)
-                        Box(
+                        GlassSurface(modifier = Modifier.size(44.dp), shape = CircleShape, rim = GlassRim.Vertical) {
+Box(
                             modifier =
-                                Modifier.size(48.dp)
-                                    .clip(CircleShape)
+                                Modifier.fillMaxSize()
                                     .combinedClickable(
                                         role = Role.Button,
                                         onClick = { themeController.toggle(systemInDarkTheme) },
@@ -117,11 +113,11 @@ fun LoginScreen(
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
-                                imageVector =
+                                painter =
                                     when (mode) {
-                                        ThemeMode.SYSTEM -> Icons.Filled.BrightnessAuto
-                                        ThemeMode.LIGHT -> Icons.Filled.LightMode
-                                        ThemeMode.DARK -> Icons.Filled.DarkMode
+                                        ThemeMode.SYSTEM -> painterResource(R.drawable.lucide_sun_moon)
+                                        ThemeMode.LIGHT -> painterResource(R.drawable.lucide_sun)
+                                        ThemeMode.DARK -> painterResource(R.drawable.lucide_moon)
                                     },
                                 contentDescription =
                                     when (mode) {
@@ -139,10 +135,12 @@ fun LoginScreen(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+}
                     }
-                    IconButton(onClick = onOpenSettings) {
+                    Spacer(Modifier.width(8.dp))
+                    GlassIconButton(onClick = onOpenSettings, modifier = Modifier.padding(end = 8.dp)) {
                         Icon(
-                            imageVector = Icons.Filled.Settings,
+                            painter = painterResource(R.drawable.lucide_settings),
                             contentDescription = stringResource(R.string.settings_title),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
