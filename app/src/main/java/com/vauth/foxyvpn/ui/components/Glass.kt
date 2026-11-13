@@ -1,5 +1,12 @@
 package com.vauth.foxyvpn.ui.components
 
+import android.graphics.PixelFormat
+import android.media.ImageReader
+import android.os.HandlerThread
+import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import java.util.concurrent.atomic.AtomicInteger
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.draw
@@ -164,8 +171,8 @@ fun Modifier.glassTouchWatch(): Modifier =
         }
     }
 
-/** Set if drawing content off-screen ever fails on this device; glass then shows the backdrop only. */
-private var captureBroken = false
+/** Set if rendering the picture ever fails on this device; glass then shows the backdrop only. */
+@Volatile private var captureBroken = false
 /** True while something else needs every frame (the theme reveal); no pictures are taken then. */
 private var capturePaused = false
 
@@ -173,17 +180,30 @@ internal fun setGlassPaused(paused: Boolean) {
     capturePaused = paused
 }
 
+private const val BUFFERS = 3
+/** Pictures that may be on their way at once; more would make the UI wait for the reader. */
+private const val MAX_IN_FLIGHT = 2
+
 /**
- * Something glass can sit on top of. Each time the node carrying
- * [glassSource] is drawn, it is drawn once more, small, into a bitmap on top
- * of the backdrop; the bitmap is blurred and panes above show the piece that
- * lies behind them. This is what CSS calls backdrop-filter: blur, done by hand
- * so that it works on every Android version.
+ * Something glass can sit on top of. The node carrying [glassSource] draws
+ * into a layer. Every frame the GPU renders a thumbnail of that layer (on top
+ * of the backdrop) into a small off-screen surface; a worker thread reads it
+ * back, blurs it and hands it over, and panes above show the piece that lies
+ * behind them. This is what CSS calls backdrop-filter: blur, done by hand so
+ * that it works on every Android version.
+ *
+ * Requests are not serialised: a new picture is asked for every frame while
+ * earlier ones are still on their way, so the rate is the frame rate and only
+ * the delay (two to three frames) depends on the device.
  *
  * Nothing that uses the picture may live inside the source, or it would end up
  * in its own background.
  */
-class GlassSource internal constructor(private val backdrop: GlassBackdrop?) {
+class GlassSource
+internal constructor(
+    private val backdrop: GlassBackdrop?,
+    internal val layer: GraphicsLayer,
+) {
     internal var origin by mutableStateOf(Offset.Zero)
     internal var area = Size.Zero
         private set
@@ -191,109 +211,196 @@ class GlassSource internal constructor(private val backdrop: GlassBackdrop?) {
         private set
 
     private var frame by mutableIntStateOf(0)
+    private val inFlight = AtomicInteger(0)
+    private var lastRequestAt = 0L
+    @Volatile private var released = false
+    @Volatile private var pendingArea = Size.Zero
+    private var reader: ImageReader? = null
+    private val main = Handler(Looper.getMainLooper())
+    private val drawScope = CanvasDrawScope()
 
-    // Three bitmaps in rotation. The one on screen is never written to: the
-    // render thread may still be reading it while the next frame is prepared,
-    // and a half-written picture would show up as a flash.
-    private val bitmaps = arrayOfNulls<ImageBitmap>(BUFFERS)
-    private val canvases = arrayOfNulls<ComposeCanvas>(BUFFERS)
-    private var next = 0
+    // Three bitmaps: the worker never writes to the one on screen, nor to the
+    // one it has just handed over.
+    private val buffers = arrayOfNulls<Bitmap>(BUFFERS)
+    private val images = arrayOfNulls<ImageBitmap>(BUFFERS)
+    @Volatile private var showing = -1
+    private var handedOver = -1
     private var pixels = IntArray(0)
     private var scratch = IntArray(0)
 
-    /** Smoothed cost of one picture, used to back off on slow devices. */
-    private var costMs = 0f
-    private var skipped = 0
-    private var loggedAt = 0L
+    // Diagnostics, written to the log now and then.
+    private var arrivals = 0
+    private var delaySum = 0L
+    private var windowStart = 0L
 
     /** Subscribes the caller to new pictures of this source. */
     internal fun observe(): Int = frame
 
-    internal fun capture(scope: ContentDrawScope) {
-        if (captureBroken || capturePaused) return
+    /** Called right after [layer] was recorded. */
+    internal fun snap(scope: DrawScope) {
+        if (captureBroken || capturePaused || released) return
+        val now = SystemClock.uptimeMillis()
+        // Pictures that never arrived must not block new ones for ever.
+        if (inFlight.get() >= MAX_IN_FLIGHT && now - lastRequestAt > 1_000L) inFlight.set(0)
+        if (inFlight.get() >= MAX_IN_FLIGHT) return
         val full = scope.size
         if (full.width < 1f || full.height < 1f) return
-        // If a picture costs a large part of a frame, take one every second or third frame.
-        val stride = if (costMs > 12f) 3 else if (costMs > 6f) 2 else 1
-        skipped++
-        if (skipped < stride) return
-        skipped = 0
-
-        val started = System.nanoTime()
         val scale = CAPTURE_WIDTH / full.width
         val w = CAPTURE_WIDTH
         val h = max(1, (full.height * scale).roundToInt())
-        val slot = next
-        var bitmap = bitmaps[slot]
-        var target = canvases[slot]
-        if (bitmap == null || target == null || bitmap.width != w || bitmap.height != h) {
-            bitmap = ImageBitmap(w, h)
-            target = ComposeCanvas(bitmap)
-            bitmaps[slot] = bitmap
-            canvases[slot] = target
-        }
-        if (pixels.size != w * h) {
-            pixels = IntArray(w * h)
-            scratch = IntArray(w * h)
-        }
-        val native = target.nativeCanvas
-        val checkpoint = native.save()
         try {
-            native.scale(scale, scale)
-            val behind = backdrop
-            if (behind != null && behind.area.width > 0f) {
-                native.save()
-                native.translate(behind.origin.x - origin.x, behind.origin.y - origin.y)
-                scope.draw(scope, scope.layoutDirection, target, behind.area) {
-                    drawFlameField(behind.area, behind.glow, behind.dark, behind.base)
-                }
-                native.restore()
-            } else {
-                native.drawColor(android.graphics.Color.BLACK)
+            var target = reader
+            if (target == null || target.width != w || target.height != h) {
+                target?.close()
+                target = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, MAX_IN_FLIGHT + 2)
+                target.setOnImageAvailableListener({ onPicture(it) }, ReadbackThread.handler)
+                reader = target
+                inFlight.set(0)
             }
-            scope.draw(scope, scope.layoutDirection, target, full) { scope.drawContent() }
-        } finally {
-            native.restoreToCount(checkpoint)
+            val behind = backdrop
+            val at = origin
+            val surface = target.surface
+            val canvas = surface.lockHardwareCanvas()
+            try {
+                canvas.drawColor(android.graphics.Color.BLACK)
+                drawScope.draw(scope, scope.layoutDirection, ComposeCanvas(canvas), Size(w.toFloat(), h.toFloat())) {
+                    scale(scale, scale, pivot = Offset.Zero) {
+                        if (behind != null && behind.area.width > 0f) {
+                            translate(behind.origin.x - at.x, behind.origin.y - at.y) {
+                                drawFlameField(behind.area, behind.glow, behind.dark, behind.base)
+                            }
+                        }
+                        drawLayer(layer)
+                    }
+                }
+            } finally {
+                surface.unlockCanvasAndPost(canvas)
+            }
+            // The image carries its own request time, so the delay can be measured.
+            inFlight.incrementAndGet()
+            lastRequestAt = now
+            pendingArea = full
+        } catch (error: Exception) {
+            captureBroken = true
+            AppLogger.w("Glass", "off-screen rendering failed; glass shows the backdrop only", error)
         }
-        val raw = bitmap.asAndroidBitmap()
-        raw.getPixels(pixels, 0, w, 0, 0, w, h)
-        boxBlur(pixels, scratch, w, h, radius = 3)
-        boxBlur(pixels, scratch, w, h, radius = 3)
-        raw.setPixels(pixels, 0, w, 0, 0, w, h)
-        area = full
-        blurred = bitmap
-        next = (slot + 1) % BUFFERS
-        Snapshot.withoutReadObservation { frame++ }
+    }
 
-        val took = (System.nanoTime() - started) / 1_000_000f
-        costMs = if (costMs == 0f) took else costMs * 0.9f + took * 0.1f
-        val now = SystemClock.uptimeMillis()
-        if (now - loggedAt > 15_000L) {
-            loggedAt = now
-            AppLogger.i("Glass", "picture costs %.1f ms, every %d frame(s)".format(java.util.Locale.US, costMs, stride))
+    /** Runs on the read-back thread, so the pixel work never costs the UI a frame. */
+    private fun onPicture(source: ImageReader) {
+        inFlight.updateAndGet { if (it > 0) it - 1 else 0 }
+        try {
+            // Older pictures still queued are dropped; only the newest matters.
+            val image = source.acquireLatestImage() ?: return
+            val w = image.width
+            val h = image.height
+            val requestedAt = image.timestamp / 1_000_000L
+            try {
+                val plane = image.planes[0]
+                val bytes = plane.buffer
+                val rowStride = plane.rowStride
+                val pixelStride = plane.pixelStride
+                if (pixels.size != w * h) {
+                    pixels = IntArray(w * h)
+                    scratch = IntArray(w * h)
+                }
+                for (y in 0 until h) {
+                    var at = y * rowStride
+                    val row = y * w
+                    for (x in 0 until w) {
+                        val r = bytes.get(at).toInt() and 0xFF
+                        val g = bytes.get(at + 1).toInt() and 0xFF
+                        val b = bytes.get(at + 2).toInt() and 0xFF
+                        pixels[row + x] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+                        at += pixelStride
+                    }
+                }
+            } finally {
+                image.close()
+            }
+            boxBlur(pixels, scratch, w, h, radius = 3)
+            boxBlur(pixels, scratch, w, h, radius = 3)
+            var slot = 0
+            while (slot == showing || slot == handedOver) slot++
+            var out = buffers[slot]
+            if (out == null || out.width != w || out.height != h) {
+                out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                buffers[slot] = out
+                images[slot] = out.asImageBitmap()
+            }
+            out.setPixels(pixels, 0, w, 0, 0, w, h)
+            handedOver = slot
+            val shownArea = pendingArea
+            main.post {
+                showing = slot
+                blurred = images[slot]
+                area = shownArea
+                frame++
+                logDelay(requestedAt)
+            }
+        } catch (error: Exception) {
+            if (!released) {
+                captureBroken = true
+                AppLogger.w("Glass", "reading the picture back failed; glass shows the backdrop only", error)
+            }
         }
+    }
+
+    private fun logDelay(requestedAt: Long) {
+        val now = SystemClock.uptimeMillis()
+        // Image timestamps are on the same clock on most devices; ignore them where they are not.
+        val delay = now - requestedAt
+        if (delay in 0L..2_000L) delaySum += delay
+        arrivals++
+        if (windowStart == 0L) windowStart = now
+        val span = now - windowStart
+        if (span > 15_000L || (span > 2_000L && arrivals >= 100)) {
+            AppLogger.i(
+                "Glass",
+                "pictures: %.0f per second while live, %d ms behind".format(
+                    java.util.Locale.US,
+                    arrivals * 1000f / span,
+                    delaySum / arrivals,
+                ),
+            )
+            arrivals = 0
+            delaySum = 0L
+            windowStart = 0L
+        }
+    }
+
+    internal fun release() {
+        released = true
+        reader?.close()
+        reader = null
     }
 }
 
-private const val BUFFERS = 3
+/** One background thread shared by every source for reading pictures back. */
+private object ReadbackThread {
+    val handler: Handler by lazy {
+        val thread = HandlerThread("glass-readback")
+        thread.start()
+        Handler(thread.looper)
+    }
+}
 
 @Composable
 fun rememberGlassSource(): GlassSource {
     val backdrop = LocalGlassBackdrop.current
-    return remember(backdrop) { GlassSource(backdrop) }
+    val layer = rememberGraphicsLayer()
+    val source = remember(backdrop, layer) { GlassSource(backdrop, layer) }
+    DisposableEffect(source) { onDispose { source.release() } }
+    return source
 }
 
 fun Modifier.glassSource(source: GlassSource): Modifier =
     this.onGloballyPositioned { source.origin = it.positionInRoot() }
         .drawWithContent {
             GlassClock.observe()
-            drawContent()
-            try {
-                source.capture(this)
-            } catch (error: Exception) {
-                captureBroken = true
-                AppLogger.w("Glass", "off-screen capture is unavailable; glass shows the backdrop only", error)
-            }
+            source.layer.record { this@drawWithContent.drawContent() }
+            drawLayer(source.layer)
+            source.snap(this)
         }
 
 /**

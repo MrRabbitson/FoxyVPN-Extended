@@ -99,7 +99,7 @@ fun ThemeRevealOverlay(reveal: ThemeReveal) {
             // The glass takes its picture of the new theme in these frames too;
             // after that nothing but the circle runs.
             GlassClock.keepLive(400L)
-            repeat(3) { withFrameNanos {} }
+            repeat(6) { withFrameNanos {} }
             setGlassPaused(true)
             progress.animateTo(1f, tween(460, easing = EmphasizedEasing))
         } finally {
