@@ -292,6 +292,7 @@ fun FoxyNavGraph(
         val humanCheck by HumanCheck.required.collectAsStateWithLifecycle()
         var humanCheckDismissed by remember { mutableStateOf(false) }
         LaunchedEffect(humanCheck) { if (!humanCheck) humanCheckDismissed = false }
+        CompositionLocalProvider(LocalGlassContent provides screens) {
         if (
             humanCheck &&
                 !humanCheckDismissed &&
@@ -319,6 +320,7 @@ fun FoxyNavGraph(
                     }
                 },
             )
+        }
         }
         AnimatedVisibility(
             visible = tabbed,

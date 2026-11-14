@@ -180,6 +180,23 @@ internal fun setGlassPaused(paused: Boolean) {
     capturePaused = paused
 }
 
+/** Screens currently on show that must not be captured (web pages). */
+private var screenPauses = 0
+
+/**
+ * Keeps glass pictures off while this is in the composition. Web pages are
+ * drawn by the browser engine in a way that does not survive being rendered a
+ * second time into an off-screen surface: the page flickers. They need no
+ * glass under them anyway.
+ */
+@Composable
+fun PauseGlassCapture() {
+    DisposableEffect(Unit) {
+        screenPauses++
+        onDispose { screenPauses-- }
+    }
+}
+
 private const val BUFFERS = 3
 /** Pictures that may be on their way at once; more would make the UI wait for the reader. */
 private const val MAX_IN_FLIGHT = 2
@@ -238,7 +255,7 @@ internal constructor(
 
     /** Called right after [layer] was recorded. */
     internal fun snap(scope: DrawScope) {
-        if (captureBroken || capturePaused || released) return
+        if (captureBroken || capturePaused || screenPauses > 0 || released) return
         val now = SystemClock.uptimeMillis()
         // Pictures that never arrived must not block new ones for ever.
         if (inFlight.get() >= MAX_IN_FLIGHT && now - lastRequestAt > 1_000L) inFlight.set(0)

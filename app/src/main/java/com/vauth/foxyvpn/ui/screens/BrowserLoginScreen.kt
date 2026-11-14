@@ -1,5 +1,6 @@
 package com.vauth.foxyvpn.ui.screens
 
+import com.vauth.foxyvpn.ui.components.PauseGlassCapture
 import androidx.compose.ui.res.painterResource
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -174,6 +175,7 @@ fun BrowserLoginScreen(
     onSessionCaptured: (String) -> Unit,
     onCanceled: () -> Unit,
 ) {
+    PauseGlassCapture()
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
     var bridgeInstance by remember { mutableStateOf<WebChannelBridge?>(null) }
     var pageTitle by remember { mutableStateOf("") }
