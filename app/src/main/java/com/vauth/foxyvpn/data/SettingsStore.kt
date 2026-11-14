@@ -96,6 +96,27 @@ class SettingsStore(context: Context) {
             prefs.edit().putString(KEY_LATENCY_PROBE_URL, url).apply()
         }
 
+    var adBlockEnabled: Boolean
+        get() = prefs.getBoolean(KEY_ADBLOCK_ENABLED, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_ADBLOCK_ENABLED, value).apply()
+        }
+
+    var adBlockLevel: AdBlock.Level
+        get() =
+            AdBlock.Level.entries.firstOrNull { it.name == prefs.getString(KEY_ADBLOCK_LEVEL, null) }
+                ?: AdBlock.Level.STANDARD
+        set(value) {
+            prefs.edit().putString(KEY_ADBLOCK_LEVEL, value.name).apply()
+        }
+
+    /** Sites the user excluded from blocking. */
+    var adBlockExceptions: Set<String>
+        get() = prefs.getStringSet(KEY_ADBLOCK_EXCEPTIONS, emptySet()).orEmpty().toSet()
+        set(value) {
+            prefs.edit().putStringSet(KEY_ADBLOCK_EXCEPTIONS, value).apply()
+        }
+
     /** How the latency shown on the home screen is measured. */
     enum class PingMethod {
         /** HTTPS GET of the probe URL through the tunnel. */
@@ -663,6 +684,9 @@ class SettingsStore(context: Context) {
         const val DEFAULT_LATENCY_PROBE_URL = "https://www.gstatic.com/generate_204"
         private const val KEY_LATENCY_PROBE_URL = "latency_probe_url"
         private const val KEY_PING_METHOD = "ping_method"
+        private const val KEY_ADBLOCK_ENABLED = "adblock_enabled"
+        private const val KEY_ADBLOCK_LEVEL = "adblock_level"
+        private const val KEY_ADBLOCK_EXCEPTIONS = "adblock_exceptions"
 
         fun isValidProbeUrl(value: String): Boolean =
             runCatching {

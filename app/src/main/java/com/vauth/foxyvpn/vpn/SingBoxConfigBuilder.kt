@@ -7,7 +7,12 @@ import java.net.URI
 import org.json.JSONArray
 import org.json.JSONObject
 
+/** Where the ad-block rule-set lives and which domains stay reachable. */
+data class AdBlockRules(val ruleSetPath: String, val allow: List<String>)
+
 object SingBoxConfigBuilder {
+
+    private const val ADBLOCK_TAG = "foxy-adblock"
 
     private fun proxyUsers(settings: TunnelSettings) =
         JSONArray()
@@ -43,6 +48,7 @@ object SingBoxConfigBuilder {
         bearerToken: String = "",
         appPackageName: String? = null,
         controllerSecret: String,
+        adBlock: AdBlockRules? = null,
     ): String {
         require(
             primaryCandidate.port in 1..65_535 &&
@@ -205,6 +211,30 @@ object SingBoxConfigBuilder {
             }
 
         dns.put("servers", dnsServers)
+        if (adBlock != null) {
+            dns.put(
+                "rules",
+                JSONArray().apply {
+                    if (adBlock.allow.isNotEmpty()) {
+                        put(
+                            JSONObject().apply {
+                                put("domain_suffix", JSONArray(adBlock.allow))
+                                put("action", "route")
+                                put("server", finalDnsTag)
+                            }
+                        )
+                    }
+                    // Blocked names simply do not exist, which apps handle without retrying.
+                    put(
+                        JSONObject().apply {
+                            put("rule_set", ADBLOCK_TAG)
+                            put("action", "predefined")
+                            put("rcode", "NXDOMAIN")
+                        }
+                    )
+                },
+            )
+        }
         dns.put("final", finalDnsTag)
         settings.ipMode.dnsStrategy?.let {
             dns.put("strategy", it)
@@ -425,9 +455,27 @@ object SingBoxConfigBuilder {
 
         val route =
             JSONObject().apply {
+                if (adBlock != null) {
+                    put(
+                        "rule_set",
+                        JSONArray().put(
+                            JSONObject().apply {
+                                put("type", "local")
+                                put("tag", ADBLOCK_TAG)
+                                put("format", "source")
+                                put("path", adBlock.ruleSetPath)
+                            }
+                        ),
+                    )
+                }
                 put(
                     "rules",
                     JSONArray().apply {
+                        if (adBlock != null) {
+                            // Read the name from TLS/HTTP/QUIC so connections that skip
+                            // DNS (cached or hard-coded addresses) are caught too.
+                            put(JSONObject().apply { put("action", "sniff") })
+                        }
                         put(
                             JSONObject().apply {
                                 put("protocol", "dns")
@@ -446,6 +494,22 @@ object SingBoxConfigBuilder {
                                 put("action", "reject")
                             }
                         )
+                        if (adBlock != null) {
+                            if (adBlock.allow.isNotEmpty()) {
+                                put(
+                                    JSONObject().apply {
+                                        put("domain_suffix", JSONArray(adBlock.allow))
+                                        put("outbound", "proxy-out")
+                                    }
+                                )
+                            }
+                            put(
+                                JSONObject().apply {
+                                    put("rule_set", ADBLOCK_TAG)
+                                    put("action", "reject")
+                                }
+                            )
+                        }
                         if (settings.bypassLocalNetwork && localNetworkAddresses.isNotEmpty()) {
                             put(
                                 JSONObject().apply {

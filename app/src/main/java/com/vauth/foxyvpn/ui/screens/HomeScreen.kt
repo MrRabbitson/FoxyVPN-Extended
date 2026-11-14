@@ -1,5 +1,6 @@
 package com.vauth.foxyvpn.ui.screens
 
+import com.vauth.foxyvpn.data.HumanCheck
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -106,6 +107,7 @@ fun HomeScreen(
     onRequestConnect: () -> Unit,
     onDisconnect: () -> Unit,
     onOpenServers: () -> Unit,
+    onOpenHumanCheck: () -> Unit = {},
 ) {
     val state by FoxyVpnService.state.collectAsStateWithLifecycle()
     val proxyOnlyActive by FoxyVpnService.proxyOnlyActive.collectAsStateWithLifecycle()
@@ -244,6 +246,42 @@ fun HomeScreen(
                         style = MaterialTheme.typography.bodyLarge,
                         color = secondary,
                     )
+            }
+
+            val humanCheck by HumanCheck.required.collectAsStateWithLifecycle()
+            AnimatedVisibility(
+                visible = humanCheck,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+            ) {
+                SectionCard(Modifier.fillMaxWidth().padding(top = 14.dp), onClick = onOpenHumanCheck) {
+                    Row(
+                        Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            painterResource(R.drawable.lucide_shield_alert),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp),
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(stringResource(R.string.human_check_title), style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                stringResource(R.string.human_check_banner),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Icon(
+                            painterResource(R.drawable.lucide_chevron_right),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
             }
 
             val error = lastError

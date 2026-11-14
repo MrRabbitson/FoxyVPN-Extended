@@ -441,6 +441,7 @@ class FxaAuthRepository(
     ): JSONObject =
         withTimeout(120_000L) {
             withContext(Dispatchers.IO) {
+                HumanCheck.ensureClear()
                 val url = fullUrl.toHttpUrl()
                 val origin = "${url.scheme}://${url.host}"
                 val bodyBytes = jsonBody.toString().toByteArray(Charsets.UTF_8)
@@ -474,6 +475,8 @@ class FxaAuthRepository(
                         )
                     } catch (cancellation: CancellationException) {
                         throw cancellation
+                    } catch (humanCheck: HumanCheckRequiredException) {
+                        throw humanCheck
                     } catch (solveFailure: Exception) {
                         AppLogger.w(TAG, "could not solve the Fastly challenge", solveFailure)
                         FoxyRemoteConfig.triggerRefresh()

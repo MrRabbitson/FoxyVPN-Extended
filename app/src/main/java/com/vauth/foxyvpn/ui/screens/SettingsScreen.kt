@@ -1,5 +1,9 @@
 package com.vauth.foxyvpn.ui.screens
 
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.rememberCoroutineScope
+import com.vauth.foxyvpn.data.AdBlock
+import kotlinx.coroutines.launch
 import com.vauth.foxyvpn.ui.components.GlassRadioButton
 import com.vauth.foxyvpn.ui.components.GlassSwitch
 import androidx.compose.foundation.layout.Row
@@ -123,6 +127,55 @@ fun SettingsScreen(
     var mtu by remember { mutableIntStateOf(settingsStore.mtu) }
     var latencyProbeUrl by remember { mutableStateOf(settingsStore.latencyProbeUrl) }
     var pingMethod by remember { mutableStateOf(settingsStore.pingMethod) }
+    var adBlockEnabled by remember { mutableStateOf(settingsStore.adBlockEnabled) }
+    var adBlockLevel by remember { mutableStateOf(settingsStore.adBlockLevel) }
+    var adBlockExceptions by remember { mutableStateOf(settingsStore.adBlockExceptions) }
+    var adBlockUpdated by remember(adBlockLevel) { mutableStateOf(AdBlock.lastUpdated(context, adBlockLevel)) }
+    var adBlockUpdating by remember { mutableStateOf(false) }
+    var showAdBlockLevel by remember { mutableStateOf(false) }
+    var showAdBlockExceptions by remember { mutableStateOf(false) }
+    val adBlockScope = rememberCoroutineScope()
+    fun updateAdBlock(level: AdBlock.Level) {
+        if (adBlockUpdating || level.remoteFile == null) return
+        adBlockUpdating = true
+        adBlockScope.launch {
+            val result = runCatching { AdBlock.refresh(context, level) }
+            adBlockUpdating = false
+            adBlockUpdated = AdBlock.lastUpdated(context, level)
+            android.widget.Toast.makeText(
+                    context,
+                    result.fold(
+                        { context.getString(R.string.adblock_updated, it) },
+                        { context.getString(R.string.adblock_update_failed) },
+                    ),
+                    android.widget.Toast.LENGTH_SHORT,
+                )
+                .show()
+        }
+    }
+    if (showAdBlockLevel) {
+        AdBlockLevelDialog(
+            current = adBlockLevel,
+            onDismiss = { showAdBlockLevel = false },
+            onConfirm = {
+                settingsStore.adBlockLevel = it
+                adBlockLevel = it
+                showAdBlockLevel = false
+                if (AdBlock.isStale(context, it)) updateAdBlock(it)
+            },
+        )
+    }
+    if (showAdBlockExceptions) {
+        AdBlockExceptionsDialog(
+            current = adBlockExceptions,
+            onDismiss = { showAdBlockExceptions = false },
+            onConfirm = {
+                settingsStore.adBlockExceptions = it
+                adBlockExceptions = it
+                showAdBlockExceptions = false
+            },
+        )
+    }
     var showPingDialog by remember { mutableStateOf(false) }
     if (showPingDialog) {
         PingMethodDialog(
@@ -440,6 +493,68 @@ fun SettingsScreen(
                 modifier = Modifier.clickable { activeDialog = SettingsDialog.MTU },
             )
 
+            }
+            SectionLabel(stringResource(R.string.settings_section_adblock))
+            GlassGroup {
+            SettingsToggle(
+                title = stringResource(R.string.adblock_toggle),
+                summary = stringResource(R.string.adblock_toggle_help),
+                checked = adBlockEnabled,
+                onCheckedChange = {
+                    settingsStore.adBlockEnabled = it
+                    adBlockEnabled = it
+                    if (it && AdBlock.isStale(context, adBlockLevel)) updateAdBlock(adBlockLevel)
+                },
+            )
+            if (adBlockEnabled) {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.adblock_level)) },
+                    supportingContent = { Text(adBlockLevel.label()) },
+                    trailingContent = {
+                        Icon(painterResource(R.drawable.lucide_chevron_right), contentDescription = null)
+                    },
+                    modifier = Modifier.clickable { showAdBlockLevel = true },
+                )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.adblock_exceptions)) },
+                    supportingContent = {
+                        Text(
+                            if (adBlockExceptions.isEmpty()) stringResource(R.string.settings_none)
+                            else adBlockExceptions.sorted().joinToString(", "),
+                            maxLines = 2,
+                        )
+                    },
+                    trailingContent = {
+                        Icon(painterResource(R.drawable.lucide_chevron_right), contentDescription = null)
+                    },
+                    modifier = Modifier.clickable { showAdBlockExceptions = true },
+                )
+                if (adBlockLevel.remoteFile != null) {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.adblock_update)) },
+                        supportingContent = {
+                            Text(
+                                when {
+                                    adBlockUpdating -> stringResource(R.string.adblock_updating)
+                                    adBlockUpdated != null ->
+                                        stringResource(
+                                            R.string.adblock_last_updated,
+                                            android.text.format.DateUtils.getRelativeTimeSpanString(adBlockUpdated!!).toString(),
+                                        )
+                                    else -> stringResource(R.string.adblock_never_updated)
+                                }
+                            )
+                        },
+                        modifier = Modifier.clickable(enabled = !adBlockUpdating) { updateAdBlock(adBlockLevel) },
+                    )
+                }
+                Text(
+                    stringResource(R.string.adblock_applies_next),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 10.dp),
+                )
+            }
             }
             SectionLabel(stringResource(R.string.settings_section_dns))
             GlassGroup {
@@ -970,6 +1085,122 @@ private fun PingMethodDialog(
         },
         confirmButton = {
             GlassTextButton(onClick = { onConfirm(selected) }) { Text(stringResource(R.string.save)) }
+        },
+        dismissButton = {
+            GlassTextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        },
+    )
+}
+
+@Composable
+private fun AdBlock.Level.label(): String =
+    stringResource(
+        when (this) {
+            AdBlock.Level.BASIC -> R.string.adblock_level_basic
+            AdBlock.Level.STANDARD -> R.string.adblock_level_standard
+            AdBlock.Level.STRICT -> R.string.adblock_level_strict
+        }
+    )
+
+@Composable
+private fun AdBlock.Level.help(): String =
+    stringResource(
+        when (this) {
+            AdBlock.Level.BASIC -> R.string.adblock_level_basic_help
+            AdBlock.Level.STANDARD -> R.string.adblock_level_standard_help
+            AdBlock.Level.STRICT -> R.string.adblock_level_strict_help
+        }
+    )
+
+@Composable
+private fun AdBlockLevelDialog(
+    current: AdBlock.Level,
+    onDismiss: () -> Unit,
+    onConfirm: (AdBlock.Level) -> Unit,
+) {
+    var selected by remember { mutableStateOf(current) }
+    GlassAlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.adblock_level)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()).selectableGroup()) {
+                AdBlock.Level.entries.forEach { level ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier =
+                            Modifier.fillMaxWidth()
+                                .selectable(
+                                    selected = selected == level,
+                                    role = Role.RadioButton,
+                                    onClick = { selected = level },
+                                )
+                                .heightIn(min = 48.dp)
+                                .padding(vertical = 4.dp),
+                    ) {
+                        GlassRadioButton(selected = selected == level, onClick = null)
+                        Column(Modifier.padding(start = 12.dp)) {
+                            Text(level.label())
+                            Text(
+                                level.help(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            GlassTextButton(onClick = { onConfirm(selected) }) { Text(stringResource(R.string.save)) }
+        },
+        dismissButton = {
+            GlassTextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        },
+    )
+}
+
+@Composable
+private fun AdBlockExceptionsDialog(
+    current: Set<String>,
+    onDismiss: () -> Unit,
+    onConfirm: (Set<String>) -> Unit,
+) {
+    var text by remember { mutableStateOf(current.sorted().joinToString("\n")) }
+    val lines = text.split('\n', ',', ' ').map { it.trim() }.filter { it.isNotEmpty() }
+    val parsed = lines.mapNotNull { AdBlock.normalizeDomain(it) }.toSet()
+    val invalid = lines.size != lines.mapNotNull { AdBlock.normalizeDomain(it) }.size
+    GlassAlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.adblock_exceptions)) },
+        text = {
+            Column {
+                Text(
+                    stringResource(R.string.adblock_exceptions_help),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    placeholder = { Text("example.com") },
+                    isError = invalid,
+                    supportingText =
+                        if (invalid) {
+                            { Text(stringResource(R.string.adblock_exceptions_invalid)) }
+                        } else {
+                            null
+                        },
+                    minLines = 4,
+                    maxLines = 8,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            GlassTextButton(onClick = { onConfirm(parsed) }, enabled = !invalid) {
+                Text(stringResource(R.string.save))
+            }
         },
         dismissButton = {
             GlassTextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }

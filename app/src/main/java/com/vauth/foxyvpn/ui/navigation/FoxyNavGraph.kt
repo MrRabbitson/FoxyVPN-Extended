@@ -1,5 +1,10 @@
 package com.vauth.foxyvpn.ui.navigation
 
+import androidx.compose.material3.Text
+import com.vauth.foxyvpn.data.HumanCheck
+import com.vauth.foxyvpn.ui.components.GlassAlertDialog
+import com.vauth.foxyvpn.ui.components.GlassTextButton
+import com.vauth.foxyvpn.ui.screens.HumanCheckScreen
 import com.vauth.foxyvpn.ui.components.GlassTopBarHost
 import com.vauth.foxyvpn.ui.components.LocalTopBarHost
 import com.vauth.foxyvpn.ui.components.TopBarHost
@@ -71,6 +76,7 @@ object FoxyRoutes {
     const val SERVERS = "servers"
     const val SETTINGS = "settings"
     const val LOGS = "logs"
+    const val HUMAN_CHECK = "human_check"
 }
 
 @Composable
@@ -81,6 +87,7 @@ fun FoxyNavGraph(
     onRequestConnect: () -> Unit,
     onDisconnect: () -> Unit,
     onSwitchServer: () -> Unit,
+    onReconnect: () -> Unit = onSwitchServer,
 ) {
     val context = LocalContext.current
     val sessionScope = rememberCoroutineScope()
@@ -174,6 +181,7 @@ fun FoxyNavGraph(
                 onRequestConnect = onRequestConnect,
                 onDisconnect = onDisconnect,
                 onOpenServers = { openTab(FoxyRoutes.SERVERS) },
+                onOpenHumanCheck = { navController.navigate(FoxyRoutes.HUMAN_CHECK) { launchSingleTop = true } },
             )
         }
         composable(FoxyRoutes.SERVERS) {
@@ -265,11 +273,53 @@ fun FoxyNavGraph(
             )
             }
         }
+        composable(FoxyRoutes.HUMAN_CHECK) {
+            HumanCheckScreen(
+                authRepository = container.authRepository,
+                onDone = {
+                    navController.popBackStack()
+                    // The session was renewed; restart the tunnel on it.
+                    onReconnect()
+                },
+                onCanceled = { navController.popBackStack() },
+            )
+        }
         composable(FoxyRoutes.LOGS) { GlassScreen { LogsScreen(onBack = { navController.popBackStack() }) } }
     }
     }
     }
         GlassTopBarHost(topBar, over = screens)
+        val humanCheck by HumanCheck.required.collectAsStateWithLifecycle()
+        var humanCheckDismissed by remember { mutableStateOf(false) }
+        LaunchedEffect(humanCheck) { if (!humanCheck) humanCheckDismissed = false }
+        if (
+            humanCheck &&
+                !humanCheckDismissed &&
+                route != FoxyRoutes.HUMAN_CHECK &&
+                route != FoxyRoutes.LOGIN &&
+                route != FoxyRoutes.SPLASH
+        ) {
+            GlassAlertDialog(
+                onDismissRequest = { humanCheckDismissed = true },
+                title = { Text(stringResource(R.string.human_check_title)) },
+                text = { Text(stringResource(R.string.human_check_text)) },
+                confirmButton = {
+                    GlassTextButton(
+                        onClick = {
+                            humanCheckDismissed = true
+                            navController.navigate(FoxyRoutes.HUMAN_CHECK) { launchSingleTop = true }
+                        }
+                    ) {
+                        Text(stringResource(R.string.human_check_open))
+                    }
+                },
+                dismissButton = {
+                    GlassTextButton(onClick = { humanCheckDismissed = true }) {
+                        Text(stringResource(R.string.human_check_later))
+                    }
+                },
+            )
+        }
         AnimatedVisibility(
             visible = tabbed,
             modifier = Modifier.align(Alignment.BottomCenter),

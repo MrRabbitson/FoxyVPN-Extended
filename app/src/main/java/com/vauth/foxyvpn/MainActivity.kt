@@ -86,7 +86,7 @@ class MainActivity : ComponentActivity() {
 
     private var switchJob: Job? = null
 
-    /** Restarts the tunnel so it picks up a newly selected location. */
+    /** Restarts the tunnel so it picks up a newly selected location or a renewed session. */
     private fun switchServer() {
         if (FoxyVpnService.state.value == ConnectionState.DISCONNECTED) return
         switchJob?.cancel()
@@ -98,6 +98,25 @@ class MainActivity : ComponentActivity() {
                         FoxyVpnService.state.first { it == ConnectionState.DISCONNECTED }
                     }
                 if (stopped != null) requestConnect()
+            }
+    }
+
+    /**
+     * After the Mozilla check the session is new, so the tunnel is started
+     * afresh on it. A check only ever comes up while connecting, so connecting
+     * is what the user wanted.
+     */
+    private fun reconnectAfterCheck() {
+        switchJob?.cancel()
+        switchJob =
+            lifecycleScope.launch {
+                if (FoxyVpnService.state.value != ConnectionState.DISCONNECTED) {
+                    FoxyVpnService.stop(this@MainActivity)
+                    withTimeoutOrNull(10_000L) {
+                        FoxyVpnService.state.first { it == ConnectionState.DISCONNECTED }
+                    } ?: return@launch
+                }
+                requestConnect()
             }
     }
 
@@ -157,6 +176,7 @@ class MainActivity : ComponentActivity() {
                             FoxyVpnService.stop(this@MainActivity)
                         },
                         onSwitchServer = { switchServer() },
+                        onReconnect = { reconnectAfterCheck() },
                     )
                         }
                         ThemeRevealOverlay(reveal)

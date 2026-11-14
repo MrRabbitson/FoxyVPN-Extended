@@ -31,6 +31,8 @@ import com.vauth.foxyvpn.data.ProxyPass
 import com.vauth.foxyvpn.data.ProxyStateStore
 import com.vauth.foxyvpn.data.QuotaExceededError
 import com.vauth.foxyvpn.data.ServerListClient
+import com.vauth.foxyvpn.data.AdBlock
+import com.vauth.foxyvpn.data.HumanCheck
 import com.vauth.foxyvpn.data.SettingsStore
 import com.vauth.foxyvpn.data.TokenInvalidError
 import com.vauth.foxyvpn.data.TunnelSettings
@@ -58,6 +60,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
@@ -431,6 +434,27 @@ class FoxyVpnService : VpnService() {
         return unvalidated
     }
 
+    /** Prepares the ad-block rule-set if blocking is on; refreshes stale lists in the background. */
+    private fun prepareAdBlock(): AdBlockRules? {
+        val store = (applicationContext as FoxyVpnApp).settingsStore
+        if (!store.adBlockEnabled) return null
+        val level = store.adBlockLevel
+        if (AdBlock.isStale(this, level)) {
+            scope.launch {
+                runCatching { AdBlock.refresh(this@FoxyVpnService, level) }
+                    .onFailure { AppLogger.w(TAG, "ad-block list update failed; keeping the previous one", it) }
+            }
+        }
+        return try {
+            AdBlock.prepareRuleSet(this, level)?.let { path ->
+                AdBlockRules(path, AdBlock.allowList(store.adBlockExceptions))
+            }
+        } catch (error: Exception) {
+            AppLogger.w(TAG, "could not prepare ad blocking; connecting without it", error)
+            null
+        }
+    }
+
     private fun isFatalUpstreamError(error: Throwable): Boolean =
         error is TokenInvalidError ||
             error is QuotaExceededError ||
@@ -494,6 +518,17 @@ class FoxyVpnService : VpnService() {
                             _lastError.value = friendlyErrorMessage(error)
                             requestDisconnect("credential renewal was rejected")
                             return@launch
+                        }
+                        if (HumanCheck.isRequired) {
+                            // Nothing to retry until a person has passed the check; the
+                            // tunnel keeps working on the current pass meanwhile.
+                            statusLabel = getString(com.vauth.foxyvpn.R.string.notif_human_check)
+                            updateNotification(statusLabel)
+                            withTimeoutOrNull((deadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L)) {
+                                HumanCheck.awaitResolved()
+                            }
+                            nextDelay = 0L
+                            continue
                         }
                         AppLogger.w(
                             TAG,
@@ -723,23 +758,36 @@ class FoxyVpnService : VpnService() {
 
                 startCredentialExpiryWatchdog(myGeneration)
 
-                val configContent =
+                val adBlock = prepareAdBlock()
+                fun buildConfig(rules: AdBlockRules?) =
                     SingBoxConfigBuilder.build(
                         primaryCandidate = primaryCandidate,
                         settings = tunnelSettings,
                         bearerToken = pass.token,
                         appPackageName = packageName,
                         controllerSecret = controllerSecret,
+                        adBlock = rules,
                     )
+                var configContent = buildConfig(adBlock)
                 ensureGenerationCurrent(myGeneration)
                 ensureLibboxSetup()
                 try {
                     Libbox.checkConfig(configContent)
                 } catch (error: Exception) {
-                    throw IllegalArgumentException(
-                        "Invalid VPN configuration: ${error.message}",
-                        error,
-                    )
+                    if (adBlock == null) {
+                        throw IllegalArgumentException(
+                            "Invalid VPN configuration: ${error.message}",
+                            error,
+                        )
+                    }
+                    // Blocking must never cost the connection itself.
+                    AppLogger.w(TAG, "ad blocking rejected by the engine; connecting without it", error)
+                    configContent = buildConfig(null)
+                    try {
+                        Libbox.checkConfig(configContent)
+                    } catch (plain: Exception) {
+                        throw IllegalArgumentException("Invalid VPN configuration: ${plain.message}", plain)
+                    }
                 }
                 AppLogger.d(TAG, "sing-box config validated successfully")
 
@@ -877,10 +925,15 @@ class FoxyVpnService : VpnService() {
                     retryNotBeforeElapsedMs.set(retryDeadlineMillis(nowElapsed, retryDelay))
                     AppLogger.w(
                         TAG,
-                        "transient connect failure; retrying in ${retryDelay / 1_000L}s",
+                        if (HumanCheck.isRequired) "connect waits for the Mozilla check"
+                        else "transient connect failure; retrying in ${retryDelay / 1_000L}s",
                     )
                     _state.value = ConnectionState.CONNECTING
-                    statusLabel = getString(com.vauth.foxyvpn.R.string.notif_reconnecting)
+                    statusLabel =
+                        getString(
+                            if (HumanCheck.isRequired) com.vauth.foxyvpn.R.string.notif_human_check
+                            else com.vauth.foxyvpn.R.string.notif_reconnecting
+                        )
                     updateNotification(statusLabel)
                     connectJob = null
                     scheduleReconnect(retryDelay)
@@ -896,7 +949,7 @@ class FoxyVpnService : VpnService() {
         retryJob =
             scope.launch {
                 try {
-                    delay(delayMillis)
+                    if (HumanCheck.isRequired) HumanCheck.awaitResolved() else delay(delayMillis)
                     if (
                         !stopping &&
                             _state.value == ConnectionState.CONNECTING &&
@@ -959,6 +1012,8 @@ class FoxyVpnService : VpnService() {
                     getString(com.vauth.foxyvpn.R.string.error_session_rejected)
                 } else error.message ?: getString(com.vauth.foxyvpn.R.string.error_guardian_unavailable)
             is TimeoutCancellationException -> getString(com.vauth.foxyvpn.R.string.error_timed_out)
+            is com.vauth.foxyvpn.data.HumanCheckRequiredException ->
+                getString(com.vauth.foxyvpn.R.string.human_check_status)
             else -> error.message ?: (error::class.simpleName ?: getString(com.vauth.foxyvpn.R.string.error_connection_failed))
         }
 

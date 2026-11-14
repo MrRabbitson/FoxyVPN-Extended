@@ -220,6 +220,7 @@ class GuardianClient(
         url: String,
         accessToken: String,
     ): Response {
+        HumanCheck.ensureClear()
         val origin = url.toHttpUrl().let { "${it.scheme}://${it.host}" }
 
         fun buildRequest(): Request {
@@ -240,6 +241,8 @@ class GuardianClient(
                 challengeSolver.solveAndInstall(challengedBody, origin, guardianUserAgent)
             } catch (cancellation: CancellationException) {
                 throw cancellation
+            } catch (humanCheck: HumanCheckRequiredException) {
+                throw humanCheck
             } catch (solveFailure: Exception) {
                 AppLogger.w(TAG, "could not solve the Fastly challenge", solveFailure)
                 FoxyRemoteConfig.triggerRefresh()
