@@ -69,6 +69,13 @@ class SettingsStore(context: Context) {
             prefs.edit().putBoolean("bypass_local_network", value).apply()
         }
 
+    /** Hand Mozilla's proxy site names instead of bare addresses (FakeIP). */
+    var sendHostnames: Boolean
+        get() = prefs.getBoolean("send_hostnames", true)
+        set(value) {
+            prefs.edit().putBoolean("send_hostnames", value).apply()
+        }
+
     var automaticRecovery: Boolean
         get() = prefs.getBoolean("automatic_recovery", false)
         set(value) {

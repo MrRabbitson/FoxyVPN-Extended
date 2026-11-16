@@ -31,6 +31,7 @@ data class TunnelSettings(
     val upstreamProxyUsername: String,
     val utlsFingerprint: SettingsStore.UtlsFingerprint,
     val bypassLocalNetwork: Boolean = true,
+    val sendHostnames: Boolean = true,
 ) {
     override fun toString() =
         "TunnelSettings(proxyOnlyMode=$proxyOnlyMode, httpVersion=$httpVersion, ipMode=$ipMode)"
@@ -44,6 +45,7 @@ fun SettingsStore.tunnelSnapshot(): TunnelSettings =
         TunnelSettings(
             automaticRecovery = automaticRecovery,
             bypassLocalNetwork = bypassLocalNetwork,
+            sendHostnames = sendHostnames,
             dnsProvider = dnsProvider,
             bootstrapDnsProvider = bootstrapDnsProvider,
             effectiveCustomEdgeAddress = effectiveCustomEdgeAddress,

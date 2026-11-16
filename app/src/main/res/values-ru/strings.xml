@@ -338,4 +338,6 @@
     <string name="adblock_updated">Список обновлён: доменов — %1$d</string>
     <string name="adblock_update_failed">Не удалось скачать список</string>
     <string name="adblock_applies_next">Изменения применятся при следующем подключении.</string>
+    <string name="settings_send_hostnames">Передавать имена сайтов (FakeIP)</string>
+    <string name="settings_send_hostnames_help">Приложения получают подставные адреса, а сервер Mozilla — имя сайта. Нужно для приложений, работающих только по IPv4. Применится при следующем подключении.</string>
 </resources>

@@ -123,6 +123,7 @@ fun SettingsScreen(
     var excludedApps by remember { mutableStateOf(settingsStore.excludedApps) }
     var includedApps by remember { mutableStateOf(settingsStore.includedApps) }
     var bypassLocalNetwork by remember { mutableStateOf(settingsStore.bypassLocalNetwork) }
+    var sendHostnames by remember { mutableStateOf(settingsStore.sendHostnames) }
     var splitTunnelMode by remember { mutableStateOf(settingsStore.splitTunnelMode) }
     var mtu by remember { mutableIntStateOf(settingsStore.mtu) }
     var latencyProbeUrl by remember { mutableStateOf(settingsStore.latencyProbeUrl) }
@@ -885,6 +886,16 @@ fun SettingsScreen(
                     Icon(painterResource(R.drawable.lucide_chevron_right), contentDescription = null)
                 },
                 modifier = Modifier.clickable { activeDialog = SettingsDialog.IP_MODE },
+            )
+            SettingsToggle(
+                title = stringResource(R.string.settings_send_hostnames),
+                summary = stringResource(R.string.settings_send_hostnames_help),
+                checked = sendHostnames,
+                enabled = !proxyOnlyMode,
+                onCheckedChange = {
+                    settingsStore.sendHostnames = it
+                    sendHostnames = it
+                },
             )
 
             }

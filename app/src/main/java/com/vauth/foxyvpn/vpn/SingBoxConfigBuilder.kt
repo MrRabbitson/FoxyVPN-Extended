@@ -13,6 +13,10 @@ data class AdBlockRules(val ruleSetPath: String, val allow: List<String>)
 object SingBoxConfigBuilder {
 
     private const val ADBLOCK_TAG = "foxy-adblock"
+    private const val FAKEIP_TAG = "fakeip-dns"
+    // Ranges kept clear of the local-network bypass list so stand-in addresses stay in the tunnel.
+    private const val FAKEIP_IPV4_RANGE = "198.18.0.0/15"
+    private const val FAKEIP_IPV6_RANGE = "2001:2::/48"
 
     private fun proxyUsers(settings: TunnelSettings) =
         JSONArray()
@@ -210,28 +214,60 @@ object SingBoxConfigBuilder {
                 }
             }
 
+        // Mozilla's proxy only reaches IPv4 hosts by name, so tunnelled apps get stand-in
+        // addresses and the tunnel puts the real site name into each CONNECT request.
+        val useFakeIp = settings.sendHostnames && !settings.proxyOnlyMode
+        if (useFakeIp) {
+            dnsServers.put(
+                JSONObject().apply {
+                    put("type", "fakeip")
+                    put("tag", FAKEIP_TAG)
+                    put("inet4_range", FAKEIP_IPV4_RANGE)
+                    put("inet6_range", FAKEIP_IPV6_RANGE)
+                }
+            )
+        }
         dns.put("servers", dnsServers)
-        if (adBlock != null) {
+        val fakeIpRule =
+            JSONObject().apply {
+                put("inbound", JSONArray().put("tun-in"))
+                put("query_type", JSONArray().put("A").put("AAAA"))
+                put("action", "route")
+                put("server", FAKEIP_TAG)
+            }
+        if (adBlock != null || useFakeIp) {
             dns.put(
                 "rules",
                 JSONArray().apply {
-                    if (adBlock.allow.isNotEmpty()) {
+                    if (adBlock != null) {
+                        if (adBlock.allow.isNotEmpty()) {
+                            if (useFakeIp) {
+                                put(
+                                    JSONObject(fakeIpRule.toString()).apply {
+                                        put("domain_suffix", JSONArray(adBlock.allow))
+                                    }
+                                )
+                            }
+                            put(
+                                JSONObject().apply {
+                                    put("domain_suffix", JSONArray(adBlock.allow))
+                                    put("action", "route")
+                                    put("server", finalDnsTag)
+                                }
+                            )
+                        }
+                        // Blocked names simply do not exist, which apps handle without retrying.
                         put(
                             JSONObject().apply {
-                                put("domain_suffix", JSONArray(adBlock.allow))
-                                put("action", "route")
-                                put("server", finalDnsTag)
+                                put("rule_set", ADBLOCK_TAG)
+                                put("action", "predefined")
+                                put("rcode", "NXDOMAIN")
                             }
                         )
                     }
-                    // Blocked names simply do not exist, which apps handle without retrying.
-                    put(
-                        JSONObject().apply {
-                            put("rule_set", ADBLOCK_TAG)
-                            put("action", "predefined")
-                            put("rcode", "NXDOMAIN")
-                        }
-                    )
+                    if (useFakeIp) {
+                        put(fakeIpRule)
+                    }
                 },
             )
         }
@@ -576,7 +612,17 @@ object SingBoxConfigBuilder {
 
         val experimental =
             JSONObject().apply {
-                put("cache_file", JSONObject().apply { put("enabled", false) })
+                put(
+                    "cache_file",
+                    JSONObject().apply {
+                        // Keeps stand-in addresses valid across reconnects, since apps cache them.
+                        put("enabled", useFakeIp)
+                        if (useFakeIp) {
+                            put("path", "fakeip-cache.db")
+                            put("store_fakeip", true)
+                        }
+                    },
+                )
                 put(
                     "clash_api",
                     JSONObject().apply {

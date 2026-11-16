@@ -332,4 +332,6 @@
     <string name="adblock_updated">List updated: %1$d domains</string>
     <string name="adblock_update_failed">Could not download the list</string>
     <string name="adblock_applies_next">Changes apply on the next connection.</string>
+    <string name="settings_send_hostnames">Send site names (FakeIP)</string>
+    <string name="settings_send_hostnames_help">Apps get stand-in addresses and Mozilla\'s server receives the site name. Needed for apps that only use IPv4. Applies on next connection.</string>
 </resources>
